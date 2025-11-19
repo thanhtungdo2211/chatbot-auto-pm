@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # api:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: awesome-agent-api
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - REDIS_DB=0
+  #   env_file:
+  #     - .env
+  #   depends_on:
+  #     - redis
+  #   volumes:
+  #     - ./src:/app/src
+  #     - ./data:/app/data
+  #   restart: unless-stopped
+  #   networks:
+  #     - agent-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: awesome-agent-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - agent-network
+    command: redis-server --appendonly yes
+
+  # Optional: Redis Commander for GUI management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: awesome-agent-redis-ui
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - agent-network
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+    driver: local
+
+networks:
+  agent-network:
+    driver: bridge

@@ -1,0 +1,42 @@
+{
+  "project_name": "AI Development Project",
+  "description": "Building an AI-powered project management chatbot",
+  "identifier": "AIDEV",
+  "tasks": [
+    {
+      "name": "Design System Architecture",
+      "description": "Design the overall system architecture using clean architecture principles",
+      "priority": "high",
+      "start_date": "2025-01-01",
+      "target_date": "2025-01-15"
+    },
+    {
+      "name": "Implement Domain Layer",
+      "description": "Implement business logic and domain models",
+      "priority": "high",
+      "start_date": "2025-01-16",
+      "target_date": "2025-01-31"
+    },
+    {
+      "name": "Build Application Services",
+      "description": "Create use case orchestration layer",
+      "priority": "medium",
+      "start_date": "2025-02-01",
+      "target_date": "2025-02-15"
+    },
+    {
+      "name": "Setup Infrastructure",
+      "description": "Configure API, database, and external services",
+      "priority": "high",
+      "start_date": "2025-02-16",
+      "target_date": "2025-02-28"
+    },
+    {
+      "name": "Write Tests",
+      "description": "Implement unit and integration tests",
+      "priority": "medium",
+      "start_date": "2025-03-01",
+      "target_date": "2025-03-15"
+    }
+  ]
+}
