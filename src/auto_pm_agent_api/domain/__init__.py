@@ -1,6 +1,6 @@
 """Domain layer initialization for auto_pm_agent_api."""
 
-from auto_pm_agent_api.domain.exceptions import (
+from .exceptions import (
     DomainException,
     ValidationError,
     MemoryError,

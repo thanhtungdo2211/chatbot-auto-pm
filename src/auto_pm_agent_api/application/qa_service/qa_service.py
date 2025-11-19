@@ -57,7 +57,7 @@ class QAService:
             
             # Generate answer using LLM with RAG
             from auto_pm_agent_api.domain.prompts import PROMPT_QA_RAG
-            
+
             prompt = PROMPT_QA_RAG.format(
                 context=context,
                 query=query,

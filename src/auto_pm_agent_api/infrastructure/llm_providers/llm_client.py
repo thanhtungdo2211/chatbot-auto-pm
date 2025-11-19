@@ -19,17 +19,15 @@ class LLMClient:
     def __init__(self):
         """Initialize LLM client with configuration from environment."""
         self.model_name = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
-        self.base_url = os.getenv("BASE_URL", "https://openrouter.ai/api/v1")
         self.api_key = os.getenv("API_KEY", os.getenv("OPENAI_API_KEY"))
         
-        # Detect if using OpenRouter
+        # Detect if using OpenRouter and set base_url accordingly
         is_openrouter = self.api_key and self.api_key.startswith("sk-or-")
         
         if is_openrouter:
-            # For OpenRouter, set as OPENAI_API_KEY and use their base URL
+            # Force OpenRouter base URL for OpenRouter API keys
+            self.base_url = "https://openrouter.ai/api/v1"
             os.environ["OPENAI_API_KEY"] = self.api_key
-            if not self.base_url or self.base_url == "https://api.openai.com/v1":
-                self.base_url = "https://openrouter.ai/api/v1"
             
             # Initialize with OpenRouter settings
             self.llm = init_chat_model(
@@ -39,7 +37,8 @@ class LLMClient:
                 openai_api_key=self.api_key
             )
         else:
-            # Standard OpenAI setup
+            # Standard OpenAI setup - use BASE_URL from env or default
+            self.base_url = os.getenv("BASE_URL", "https://api.openai.com/v1")
             if self.api_key:
                 os.environ["OPENAI_API_KEY"] = self.api_key
             

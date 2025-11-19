@@ -1,6 +1,6 @@
 """Prompts domain module initialization."""
 
-from auto_pm_agent_api.domain.prompts.templates import (
+from .templates import (
     PROMPT_ROUTER,
     PROMPT_PLANE_EXTRACT,
     PROMPT_GENERAL_BOT,
