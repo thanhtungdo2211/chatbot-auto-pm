@@ -137,6 +137,15 @@ class PlaneAPIClient:
         data = self._handle_response(response)
         return PlaneProject(**data)
     
+    def find_project_by_name(self, name: str) -> Optional[PlaneProject]:
+        """Find project by name (case-insensitive partial match)."""
+        name_lower = name.lower()
+        projects = self.list_projects()
+        for project in projects:
+            if name_lower in project.name.lower():
+                return project
+        return None
+    
     def create_project(
         self,
         name: str,
@@ -156,17 +165,26 @@ class PlaneAPIClient:
         Returns:
             PlaneProject instance
         """
+        import re
+        
         url = f"{self._get_workspace_url()}/projects/"  # Added trailing slash
+        
+        # Clean identifier: extract uppercase letters, max 6 chars (like old code)
+        clean_identifier = re.sub(r"[^A-Z]", "", identifier.upper())[:6]
+        
         payload = {
             "name": name,
-            "identifier": identifier,
+            "identifier": clean_identifier,
             "description": description or "",
+            "network": 2,  # From old update_plane.py
+            "is_deployed": True,  # From old update_plane.py
             **kwargs
         }
         payload = {k: v for k, v in payload.items() if v is not None}
         
         response = self.client.post(url, json=payload)
         data = self._handle_response(response)
+        logger.info(f"✅ Created Project: {data.get('name')} ({data.get('id')})")
         return PlaneProject(**data)
     
     def update_project(
@@ -264,6 +282,7 @@ class PlaneAPIClient:
         
         response = self.client.post(url, json=payload)
         data = self._handle_response(response)
+        logger.info(f"🧩 Created Task: {name}")
         return PlaneIssue(**data)
     
     def update_issue(
