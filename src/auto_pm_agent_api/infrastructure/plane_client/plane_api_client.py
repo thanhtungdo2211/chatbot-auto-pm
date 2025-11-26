@@ -38,22 +38,31 @@ class PlaneIssue(BaseModel):
 class PlaneMember(BaseModel):
     """Plane member model."""
     id: str
-    member: Dict[str, Any]
+    member: Optional[Dict[str, Any]] = None
     role: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    display_name: Optional[str] = None
     
     @property
     def display_name(self) -> str:
         """Get member display name."""
+        member_obj = self.member or {}
         return (
-            self.member.get("display_name") or 
-            self.member.get("email") or 
-            "Unknown"
+            self.display_name
+            or member_obj.get("display_name")
+            or member_obj.get("email")
+            or self.email
+            or member_obj.get("first_name")
+            or "Unknown"
         )
     
     @property
     def email(self) -> str:
         """Get member email."""
-        return self.member.get("email", "")
+        member_obj = self.member or {}
+        return self.__dict__.get("email") or member_obj.get("email", "")
 
 
 class PlaneAPIClient:
@@ -217,10 +226,66 @@ class PlaneAPIClient:
         try:
             response = self.client.get(url)
             data = self._handle_response(response)
-            return [PlaneMember(**member) for member in data.get("results", [])]
+            payload = data.get("results") if isinstance(data, dict) else data
+            if not isinstance(payload, list):
+                logger.warning("Unexpected members payload; returning empty list.")
+                return []
+            return [PlaneMember(**member) for member in payload]
         except Exception as e:
             logger.warning(f"Could not fetch members: {e}")
             return []
+
+    def list_project_members(self, project_id: str) -> List[PlaneMember]:
+        """List all members belonging to a specific project."""
+        url = f"{self._get_workspace_url()}/projects/{project_id}/members/"  # Added trailing slash
+        try:
+            response = self.client.get(url)
+            data = self._handle_response(response)
+            members_data = data.get("results") if isinstance(data, dict) else data
+            if not isinstance(members_data, list):
+                logger.warning("Unexpected project members payload; returning empty list.")
+                return []
+            return [PlaneMember(**member) for member in members_data]
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                logger.warning(
+                    "Project members endpoint not available; falling back to workspace members."
+                )
+                return self.list_members()
+            logger.warning(f"Could not fetch project members: {e}")
+            return []
+        except Exception as e:
+            logger.warning(f"Could not fetch project members: {e}")
+            return []
+
+    def add_member_to_project(self, project_id: str, email: str, role: int) -> Dict[str, Any]:
+        """Add a workspace member to a specific project."""
+        url = f"{self._get_workspace_url()}/projects/{project_id}/add-member/"  # Added trailing slash
+        payload = {"email": email, "role": role}
+        try:
+            response = self.client.post(url, json=payload)
+            return self._handle_response(response)
+        except Exception as e:
+            logger.error(f"Failed to add member {email} to project {project_id}: {e}")
+            raise
+
+    def remove_member_from_workspace(self, member_id: str) -> bool:
+        """Remove a member from the workspace (and associated projects)."""
+        url = f"{self._get_workspace_url()}/remove-member/{member_id}/"  # Added trailing slash
+        try:
+            response = self.client.delete(url)
+            response.raise_for_status()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to remove member {member_id} from workspace: {e}")
+            raise
+
+    def delete_project(self, project_id: str) -> bool:
+        """Delete a project."""
+        url = f"{self._get_workspace_url()}/projects/{project_id}/"  # Added trailing slash
+        response = self.client.delete(url)
+        response.raise_for_status()
+        return True
 
     # Issue operations
     def list_issues(
