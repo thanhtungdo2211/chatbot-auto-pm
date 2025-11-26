@@ -1,0 +1,101 @@
+Manual API smoke checks (port 8989) with active-session handling and intent switching.
+
+1) Greeting (user_id=21)
+Q: xin chào
+A: Xin chào! Rất vui được gặp bạn. Bạn có cần trợ giúp gì không? Hãy cho tôi biết nhé!
+
+2) QA (projects count) (user_id=22)
+Q: Có bao nhiêu project hiện có?
+A: Hiện có tổng cộng 2 dự án.
+
+3) Update flow + QA + cancel switch (user_id=30)
+Q1: Cập nhật mô tả project Game Development
+A1: Vui lòng cung cấp giá trị mới để cập nhật project.
+Q2: thời tiết hôm nay?
+A2: Bạn đang thực hiện luồng 'update_existing_information'. Bạn muốn hủy để chuyển sang yêu cầu 'other_topics' không? Trả lời 'có' để hủy và chuyển, 'không' để tiếp tục luồng hiện tại.
+Q3: có
+A3: Hi! Rất vui được hỗ trợ bạn. Hiện tại, tôi không có thông tin về thời tiết... (đã hủy luồng cũ và xử lý intent mới)
+
+4) Assignment flow + out-of-scope question (user_id=31)
+Q1: Giao task viết API cho Dũng
+A1: Bạn muốn phân công cho project nào? Các project hiện có: Game Development (GD), Nhận diện khuôn mặt Spa (FRSPA).
+Q2: thời tiết Hà Nội?
+A2: Bạn đang thực hiện luồng 'assignment'. Bạn muốn hủy để chuyển sang yêu cầu 'other_topics' không? Trả lời 'có' để hủy và chuyển, 'không' để tiếp tục luồng hiện tại.
+Q3: không
+A3: Ok, tiếp tục luồng hiện tại. Vui lòng cung cấp bước tiếp theo.
+
+5) Create project flow + out-of-scope question (user_id=32)
+Q1: Tạo project mới tên Bot
+A1: Vui lòng gửi thông tin để tạo project. Hiện tại dữ liệu về project sẽ được nhận từ file.
+Q2: thời tiết?
+A2: Bạn đang thực hiện luồng 'create_new_project'. Bạn muốn hủy để chuyển sang yêu cầu 'other_topics' không? Trả lời 'có' để hủy và chuyển, 'không' để tiếp tục luồng hiện tại.
+
+6) QA within update flow (user_id=23)
+Q1: Cập nhật mô tả project Game Development
+A1: Vui lòng cung cấp giá trị mới để cập nhật project.
+Q2: Dự án này có bao nhiêu task?
+A2: Dự án "Game Development" có 5 task, trong khi dự án "Nhận diện khuôn mặt Spa" có 2 task. Tổng cộng, cả hai dự án có 7 task.
+
+7) Assignment suggestion attempt (user_id=41) – blocked by missing member data from Plane
+Q1: Giao task trống trong project Game Development cho team
+A1: Bạn muốn phân công cho project nào? Các project hiện có: Game Development (GD), Nhận diện khuôn mặt Spa (FRSPA).
+Q2: Game Development
+A2: Không lấy được danh sách thành viên để phân công.
+Note: Plane API trả payload members thiếu field `member`, workspace members trả list thô → không có dữ liệu thành viên nên không tạo được gợi ý phân công.
+
+8) Assignment suggestion with direct project mention (user_id=50)
+Q: Giao task trống trong project Game Development cho team
+A: Không lấy được danh sách thành viên để phân công. (Đã nhận diện project từ câu hỏi, không hỏi lại chọn project; lỗi do dữ liệu members từ Plane thiếu trường `member`/email nên không lập được gợi ý.)
+
+9) Add member then switch to assignment (user_id=62)
+Q1: Cập nhật thêm member alice@example.com vào project Game Development
+A1: Thêm member alice@example.com (role=15) vào project Game Development. Bạn có xác nhận không?
+Q2: có
+A2: Cập nhật thành công! Không thể thêm member vào project. (Plane API không chấp nhận email giả)
+Q3: Giao task trống trong project Game Development cho team
+A3: Bạn đang thực hiện luồng 'update_existing_information'. Bạn muốn hủy để chuyển sang yêu cầu 'assignment' không? Trả lời 'có' để hủy và chuyển, 'không' để tiếp tục luồng hiện tại.
+Q4: có
+A4: Không lấy được danh sách thành viên để phân công. (Vẫn thiếu dữ liệu members từ Plane, nên không tạo gợi ý assignment)
+
+10) Workspace members (direct Plane API, not via chatbot)
+Request: GET http://192.168.6.16:8000/api/v1/workspaces/thang/members/ (x-api-key auth)
+Response (truncated):
+- 28773139-33e7-49c9-892e-84c9bec7c014 | display_name: tung.0982548086 | email: tung.0982548086@gmail.com | role: 20
+- 819556d8-9da7-4986-97cb-41fc4f354ec0 | display_name: newuser10 | email: newuser10@example.com | role: 20
+- 0eba0d41-de28-4705-8831-d0865f321112 | display_name: thang | email: thang@gmail.com | role: 20
+
+11) Ask members via chatbot → add member → switch to assignment (user_id=72)
+Q1: Hiện có những member nào trong workspace?
+A1: Hiện tại, trong dữ liệu được cung cấp không có thông tin về các thành viên (members) trong workspace. (list_members parsing thất bại nên trả trống)
+Q2: Cập nhật thêm member newuser10@example.com vào project Game Development
+A2: Thêm member newuser10@example.com (role=15) vào project Game Development. Bạn có xác nhận không?
+Q3: có
+A3: Cập nhật thành công! Không thể thêm member vào project. (Plane API không chấp nhận/gặp lỗi khi add-member)
+Q4: Giao task trống trong project Game Development cho team
+A4: Bạn đang thực hiện luồng 'update_existing_information'. Bạn muốn hủy để chuyển sang yêu cầu 'assignment' không? Trả lời 'có' để hủy và chuyển, 'không' để tiếp tục luồng hiện tại.
+Q5: có
+A5: Không lấy được danh sách thành viên để phân công. (list_project_members → Pydantic lỗi do payload thiếu field `member`; fallback list_members cũng lỗi → không có member data)
+
+12) Hỏi member (đã fix parsing) → nhận gợi ý assignment (user_id=80)
+Q1: Hiện có những member nào trong workspace?
+A1: Hiện có hai thành viên: tung.0982548086 (tung.0982548086@gmail.com), thang (thang@gmail.com). (Đã parse được list_members, role int được chấp nhận)
+Q2: Thêm member newuser10@example.com vào project Game Development
+A2: Gợi ý phân công cho project Game Development (5 task đều gợi ý giao cho tung.0982548086). (Intent classifier vào assignment, dùng member sẵn có; không còn lỗi thiếu member)
+
+13) Restart server, ask members → add member request → nhận gợi ý assignment (user_id=90)
+Server: restart `PYTHONPATH=src uvicorn ... --port 8989`
+Q1: Hiện có những member nào trong workspace?
+A1: Hiện có 2 thành viên: Tung (tung.0982548086@gmail.com), Thang (thang@gmail.com).
+Q2: Thêm member newuser10@example.com vào project Game Development
+A2: Gợi ý phân công cho project Game Development (5 task gợi ý giao cho Tung; lý do kỹ năng Python/OpenCV, workload còn trống). Không cần chọn project lại, không báo thiếu member.
+
+14) Full flow after server restart with intent override (user_id=102)
+Server: fresh restart `PYTHONPATH=src uvicorn ... --port 8989`
+Q1: Hiện có những member nào trong workspace?
+A1: 2 thành viên: tung.0982548086 (tung.0982548086@gmail.com), thang (thang@gmail.com).
+Q2: Thêm member newuser10@example.com vào project Game Development
+A2: Thêm member ... Bạn có xác nhận không? (đúng luồng update, không bị chuyển sang assignment)
+Q3: có
+A3: Cập nhật thành công! Không thể thêm member vào project. (Plane API không chấp nhận email giả)
+Q4: Giao task trống trong project Game Development cho team
+A4: Gợi ý phân công cho project Game Development: phân phối 5 task giữa tung.0982548086 và thang, có giải thích lý do, không bị hỏi hủy luồng. (Session update đã kết thúc, assignment chạy bình thường nhờ intent override)
