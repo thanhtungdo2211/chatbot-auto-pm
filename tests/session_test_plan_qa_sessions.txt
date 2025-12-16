@@ -1,0 +1,87 @@
+## QA session – Liệt kê/chi tiết project, task, member
+
+### TC-QA-01 – Liệt kê tất cả project
+
+* **Tiền điều kiện**
+  * Workspace có tối thiểu 3 project (ví dụ: Demo, Nhận diện khuôn mặt Spa, HRIS).
+  * Không có session mở (`session=None`).
+
+* **Bước thực hiện**
+  1. User: **“Hiện tại tôi đang có những project nào?”**
+  2. Bot gọi API `list_projects`.
+  3. Bot trả danh sách tên (có thể kèm identifier).
+
+* **Kỳ vọng**
+  * Liệt kê đủ và đúng các project hiện có (không sót, không lẫn).
+  * Không mở session mới (`session=None`).
+
+---
+
+### TC-QA-02 – Liệt kê task trong một project
+
+* **Tiền điều kiện**
+  * Project **“Nhận diện khuôn mặt Spa”** tồn tại, có ≥3 task.
+  * `session=None`.
+
+* **Bước thực hiện**
+  1. User: **“Trong project Nhận diện khuôn mặt Spa có những task nào?”**
+  2. Bot resolve project → gọi `list_issues(project_id=...)`.
+  3. Bot liệt kê tên task (có thể kèm trạng thái/assignee).
+
+* **Kỳ vọng**
+  * Danh sách task thuộc đúng project “Nhận diện khuôn mặt Spa”, không lẫn project khác.
+  * Không mở session mới (`session=None`).
+
+---
+
+### TC-QA-03 – Chi tiết một task
+
+* **Tiền điều kiện**
+  * Task **“Thu thập dữ liệu, training mô hình khoanh vùng đồng phục”** tồn tại trong project “Nhận diện khuôn mặt Spa”.
+  * Task có các trường: `state`, `priority`, `start_date`, `target_date`, `assignee`, `description`.
+  * `session=None`.
+
+* **Bước thực hiện**
+  1. User: **“Nói chi tiết về task ‘Thu thập dữ liệu, training mô hình khoanh vùng đồng phục’.”**
+  2. Bot tìm task theo tên (đúng project), lấy chi tiết.
+  3. Bot trả: trạng thái, ưu tiên, thời gian, assignee, mô tả.
+
+* **Kỳ vọng**
+  * Thông tin khớp dữ liệu thực tế; nếu có nhiều task trùng tên ở project khác, bot chọn đúng task hoặc hỏi làm rõ.
+  * Không mở session mới (`session=None`).
+
+---
+
+### TC-QA-04 – Liệt kê member trong workspace
+
+* **Tiền điều kiện**
+  * Workspace có danh sách member (tên/email/role).
+  * `session=None`.
+
+* **Bước thực hiện**
+  1. User: **“Hiện tại trong workspace đang có những thành viên nào?”**
+  2. Bot gọi `list_members`.
+  3. Bot trả danh sách member (tên + email, có thể kèm role).
+
+* **Kỳ vọng**
+  * Liệt kê đủ member trong workspace.
+  * Không mở session mới (`session=None`).
+
+---
+
+### TC-QA-05 – Liệt kê member trong một project
+
+* **Tiền điều kiện**
+  * Project **“Nhận diện khuôn mặt Spa”** tồn tại với ≥2 member.
+  * `session=None`.
+
+* **Bước thực hiện**
+  1. User: **“Trong project Nhận diện khuôn mặt Spa có những member nào?”**
+  2. Bot resolve project → gọi `list_project_members(project_id=...)` (fallback `list_members` nếu API 404).
+  3. Bot trả danh sách member của project (tên/email/role).
+
+* **Kỳ vọng**
+  * Liệt kê đúng member thuộc project, không lẫn project khác.
+  * Không mở session mới (`session=None`).
+
+---

@@ -173,6 +173,43 @@ Dựa vào dữ liệu về projects, tasks và members bên dưới, hãy trả
 4. Nếu có nhiều kết quả, liệt kê đầy đủ
 5. Đưa ra số liệu cụ thể khi được hỏi về số lượng
 6. Không trả về thông tin ID trên hệ thống Plane.
+7. Câu hỏi của người dùng có thể liên quan đến lịch sử hội thoại trứớc đó. Khi đưa ra câu trả lời thì phải dựa vào cả lịch sử hội thoại.
 
 Hãy trả lời câu hỏi:
+"""
+
+# Work report extraction prompt
+PROMPT_WORK_REPORT_EXTRACT = """
+Bạn là một trợ lý PM. Hãy trích xuất báo cáo công việc thành JSON theo schema yêu cầu.
+
+Nội dung báo cáo:
+{report_content}
+
+Yêu cầu:
+- Tạo daily_tasks.tasks: mỗi task gồm id, title, status, progress, time_spent.
+- id: nếu báo cáo không nêu, sinh viết tắt 2-8 ký tự từ tiêu đề (không khoảng trắng).
+- status chỉ nhận: todo, in_progress, done. Nếu không ghi rõ: progress >= 100 => done, progress = 0 => todo, còn lại => in_progress.
+- progress là số nguyên 0-100.
+- time_spent: chuẩn hóa giờ, ví dụ "4h", "2.5h" hoặc "45m".
+- blockers: liệt kê trở ngại; achievements: thành tựu nổi bật trong ngày.
+- notes: giữ nguyên nội dung báo cáo (có xuống dòng bằng \\n).
+- created_by, updated_by: nếu không có thì null.
+- created_at, updated_at: nếu không có trong báo cáo, để trống để hệ thống tự điền.
+- Chỉ trả về đúng một JSON, không kèm markdown hay giải thích.
+
+Schema bắt buộc:
+{{
+  "daily_tasks": {{
+    "tasks": [
+      {{"id": "TASK1", "title": "Tên task", "status": "in_progress", "progress": 50, "time_spent": "4h"}}
+    ],
+    "blockers": ["..."],
+    "achievements": ["..."]
+  }},
+  "notes": "Báo cáo công việc ngày hôm nay: ...",
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2024-01-01T00:00:00Z",
+  "updated_at": "2024-01-01T00:00:00Z"
+}}
 """

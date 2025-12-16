@@ -193,14 +193,6 @@ class ChatService:
         """Handle messages when a session is already in progress."""
         session_type = active_session.get("session_type")
 
-        # If user replies with a pure confirmation token, keep routing to current session
-        if self._is_confirmation_token(query):
-            file_content = active_session.get("file_content")
-            session, response = self._route_to_session(
-                user_id, session_type, query, file_content, history_str
-            )
-            return session, response
-
         # If we're waiting for cancellation confirmation, handle it first
         if active_session.get("pending_cancel"):
             return self._handle_cancel_confirmation(
@@ -210,6 +202,14 @@ class ChatService:
                 active_session=active_session,
             )
 
+        # If user replies with a pure confirmation token, keep routing to current session
+        if self._is_confirmation_token(query):
+            file_content = active_session.get("file_content")
+            session, response = self._route_to_session(
+                user_id, session_type, query, file_content, history_str
+            )
+            return session, response
+
         intent_result = self.intent_classifier.classify(history_str, query)
         new_intent = intent_result.intent
 
@@ -217,6 +217,11 @@ class ChatService:
             # Allow informational QA during an active flow without resetting the session
             if new_intent == "ask_about_existing_information":
                 session, response = self.qa_service.handle_query(user_id, query)
+                reminder = self._build_active_session_reminder(
+                    session_type=session_type, user_id=user_id, active_session=active_session
+                )
+                if reminder:
+                    response = f"{response}\n\n{reminder}"
                 return session_type, response
 
             # Continue the current session as normal
@@ -269,9 +274,12 @@ class ChatService:
             active_session.pop("pending_query", None)
             active_session.pop("pending_history", None)
             self.active_sessions[user_id] = active_session
-            return active_session.get("session_type"), (
-                "Ok, tiếp tục luồng hiện tại. Vui lòng cung cấp bước tiếp theo."
+            message = self._build_continue_message(
+                session_type=active_session.get("session_type"),
+                user_id=user_id,
+                active_session=active_session,
             )
+            return active_session.get("session_type"), message
 
         # Ask again if unclear
         return active_session.get("session_type"), (
@@ -304,6 +312,76 @@ class ChatService:
         yes_tokens = {"yes", "y", "có", "co", "ok", "oke", "đồng ý"}
         no_tokens = {"no", "n", "không", "ko", "k", "khong"}
         return normalized in yes_tokens or normalized in no_tokens
+
+    def _build_continue_message(
+        self, session_type: Optional[str], user_id: int, active_session: dict
+    ) -> str:
+        """
+        Provide a contextual continue message after user chọn 'không' (không hủy).
+        If create_new_project đang chờ confirm, nhắc lại prompt trước.
+        """
+        prefix = f"Ok, tiếp tục luồng '{session_type}'. "
+
+        if session_type == "create_new_project":
+            # Thử lấy dữ liệu trích xuất để nhắc lại prompt xác nhận
+            project_session = getattr(self.project_service, "sessions", {}).get(user_id, {})
+            extracted = project_session.get("extracted_data")
+            project = getattr(extracted, "project", None) if extracted else None
+            project_name = getattr(project, "name", None)
+            tasks = getattr(extracted, "tasks", None) if extracted else None
+            task_count = len(tasks) if tasks else 0
+            if project_name:
+                return (
+                    prefix
+                    + f"Tôi đã trích xuất được thông tin dự án '{project_name}' với {task_count} công việc. "
+                    "Bạn có muốn tôi cập nhật dự án lên Plane không?"
+                )
+
+        if session_type == "update_existing_information":
+            summary = ""
+            try:
+                summary = self.project_service.summarize_update_session(user_id)
+            except Exception:
+                summary = ""
+            if summary:
+                return f"{prefix}{summary}"
+
+        # Fallback chung cho các luồng khác
+        return (
+            prefix
+            + "Vui lòng trả lời tiếp nội dung bot vừa hỏi trong luồng này (ví dụ: xác nhận hoặc bổ sung thông tin)."
+        )
+
+    def _build_active_session_reminder(
+        self, session_type: Optional[str], user_id: int, active_session: dict
+    ) -> str:
+        """
+        Khi user hỏi thông tin (QA) trong lúc đang có session khác,
+        nhắc lại context đang chờ để tránh quên bước confirm.
+        """
+        if session_type == "create_new_project":
+            project_session = getattr(self.project_service, "sessions", {}).get(user_id, {})
+            extracted = project_session.get("extracted_data")
+            status = project_session.get("status")
+            project = getattr(extracted, "project", None) if extracted else None
+            project_name = getattr(project, "name", None)
+            tasks = getattr(extracted, "tasks", None) if extracted else None
+            task_count = len(tasks) if tasks else 0
+            if status == "ready_to_create" and project_name:
+                return (
+                    f"Lưu ý: bạn vẫn đang ở luồng tạo project. "
+                    f"Tôi đã trích xuất được dự án '{project_name}' với {task_count} công việc. "
+                    "Bạn có muốn tôi cập nhật dự án lên Plane không?"
+                )
+        elif session_type == "update_existing_information":
+            summary = ""
+            try:
+                summary = self.project_service.summarize_update_session(user_id)
+            except Exception:
+                summary = ""
+            if summary:
+                return f"Lưu ý: bạn vẫn đang ở luồng cập nhật. {summary}"
+        return ""
 
     def _execute_intent(
         self,

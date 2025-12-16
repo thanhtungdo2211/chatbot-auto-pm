@@ -3,6 +3,8 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 
+from auto_pm_agent_api.domain.models import WorkReportData
+
 
 class ChatRequest(BaseModel):
     """Request model for chat endpoint."""
@@ -42,3 +44,54 @@ class ChatResponse(BaseModel):
                 "error": None
             }
         }
+
+
+class WorkReportExtractRequest(BaseModel):
+    """Request model for extracting work report content."""
+
+    content: str = Field(..., description="Nội dung báo cáo công việc dạng text")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "content": "1. Today work: ... 2. Issues: ... 3. Tomorrow plan: ..."
+            }
+        }
+
+
+class WorkReportExtractResponse(BaseModel):
+    """Response model for work report extraction."""
+
+    success: bool = Field(True, description="Whether the extraction succeeded")
+    data: Optional[WorkReportData] = Field(None, description="Báo cáo đã được trích xuất")
+    message: str = Field(..., description="Thông báo kết quả")
+    error: Optional[str] = Field(None, description="Chi tiết lỗi (nếu có)")
+
+    class Config:
+        schema_extra = {
+        "example": {
+            "success": True,
+            "message": "Trích xuất báo cáo thành công",
+            "data": {
+                "daily_tasks": {
+                    "tasks": [
+                        {
+                            "id": "TMNDKM",
+                            "title": "Test module nhận diện khuôn mặt",
+                            "status": "in_progress",
+                            "progress": 80,
+                            "time_spent": "4h"
+                        }
+                    ],
+                    "blockers": [],
+                    "achievements": []
+                },
+                "notes": "Báo cáo công việc ngày hôm nay:\\n\\nHôm nay tôi đã làm việc ...",
+                "created_by": None,
+                "updated_by": None,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z"
+            },
+            "error": None
+        }
+    }

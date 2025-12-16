@@ -1,0 +1,849 @@
+
+
+## 1. QA thông tin (project / task / member)
+
+### TC01 – Đếm số project
+
+* **Tiền điều kiện**
+
+  * Workspace có sẵn 5 project (ví dụ).
+  * Không có session nào đang mở (`session=None`).
+
+* **Bước thực hiện**
+
+  1. User gửi: **“Có bao nhiêu project?”**
+  2. Hệ thống gọi API đếm project trong workspace (vd: `GET /projects`).
+  3. Agent sinh câu trả lời dựa vào tổng số project.
+
+* **Kỳ vọng**
+
+  * Bot trả lời dạng: **“Hiện tại có 5 project trong workspace.”**
+  * Không có lỗi parse/LLM.
+  * `session` vẫn = `None` (không mở luồng mới).
+
+---
+
+### TC02 – Đếm số task
+
+* **Tiền điều kiện**
+
+  * Workspace có sẵn 20 task.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Có bao nhiêu task?”**
+  2. Bot gọi API đếm task (tổng toàn workspace HOẶC theo thiết kế hệ thống).
+  3. Bot trả câu trả lời.
+
+* **Kỳ vọng**
+
+  * Câu trả lời: **“Hiện tại có 20 task.”**
+  * Không lỗi.
+  * `session=None`.
+
+---
+
+### TC03 – Đếm số member
+
+* **Tiền điều kiện**
+
+  * Workspace có 10 member.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Có bao nhiêu member?”**
+  2. Bot gọi API /members, đếm số lượng.
+  3. Bot trả lời.
+
+* **Kỳ vọng**
+
+  * Câu trả lời: **“Workspace hiện có 10 member.”**
+  * Không lỗi.
+  * `session=None`.
+
+---
+
+### TC04 – Liệt kê task đang “in progress”
+
+* **Tiền điều kiện**
+
+  * Có ít nhất 3 task có trạng thái `in progress`, mỗi task có `project` và `assignee`.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Liệt kê task đang in progress”**
+  2. Bot gọi API lấy task theo trạng thái `in_progress`.
+  3. Bot map dữ liệu sang câu trả lời (tên task + project + assignee).
+
+* **Kỳ vọng**
+
+  * Trả danh sách dạng:
+
+    * “1. Task A – Project Demo – Assignee: [alice@example.com](mailto:alice@example.com)
+      2. Task B – Project X – Assignee: [bob@example.com](mailto:bob@example.com) …”
+  * Mỗi item có **ít nhất**: `task_name`, `project_name`, `assignee`.
+  * `session=None`.
+
+---
+
+### TC05 – Chi tiết task theo tên
+
+* **Tiền điều kiện**
+
+  * Có task tên chính xác **“Task A”** trong project “Demo”.
+  * Task A có `status = in progress`, `assignee = alice@example.com`.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Trạng thái task ‘Task A’ là gì, assignee ai?”**
+  2. Bot thực hiện tìm task theo tên `"Task A"` (ưu tiên match chính xác).
+  3. Bot đọc các trường `status`, `project`, `assignee`.
+
+* **Kỳ vọng**
+
+  * Bot trả lời ví dụ:
+
+    > “Task ‘Task A’ thuộc project Demo, trạng thái **in progress**, assignee là **[alice@example.com](mailto:alice@example.com)**.”
+  * Thông tin đúng với DB.
+  * `session=None`.
+
+---
+
+### TC06 – Không tìm thấy task
+
+* **Tiền điều kiện**
+
+  * Không có task tên “Task XYZ”.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Task XYZ là gì?”**
+  2. Bot tìm task theo tên `"Task XYZ"`, kết quả rỗng.
+  3. Bot xử lý trường hợp không có dữ liệu.
+
+* **Kỳ vọng**
+
+  * Câu trả lời rõ ràng:
+
+    > “Không tìm thấy task ‘Task XYZ’ trong workspace.”
+  * Không cố bịa thông tin.
+  * `session=None`.
+
+---
+
+### TC07 – Không tìm thấy member
+
+* **Tiền điều kiện**
+
+  * Không có member email `abc@none.com`.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Member [abc@none.com](mailto:abc@none.com) là ai?”**
+  2. Bot gọi API tìm member theo email.
+  3. API trả về rỗng / 404.
+
+* **Kỳ vọng**
+
+  * Câu trả lời:
+
+    > “Không tìm thấy member với email [abc@none.com](mailto:abc@none.com) trong workspace.”
+  * `session=None`.
+
+---
+
+## 2. Tạo project (session create_new_project)
+
+### TC08 – Upload file JSON hợp lệ
+
+* **Tiền điều kiện**
+
+  * User upload file JSON, nội dung chứa:
+
+    * `project_name` / `name`
+    * `identifier`
+    * danh sách `tasks` (mỗi task có title, description, v.v.)
+  * `session=None`.
+
+* **Bước**
+
+  1. User upload file + nhắn: **“Tạo project từ file này”**.
+  2. Bot parse file JSON:
+
+     * Trích `name`, `identifier`, `tasks`.
+  3. Bot set session: `session.type = "create_new_project"`, lưu tạm dữ liệu trong session.
+  4. Bot hỏi xác nhận:
+
+     > “Mình sẽ tạo project ‘Demo’ với 10 task, bạn xác nhận ‘có/không’?”
+
+* **Kỳ vọng**
+
+  * Parse file thành công, không lỗi JSON.
+  * `session` chuyển sang `create_new_project` với payload đúng.
+  * Bot hỏi xác nhận trước khi gọi API tạo.
+
+---
+
+### TC09 – File thiếu dữ liệu (không có name/identifier/tasks)
+
+* **Tiền điều kiện**
+
+  * File JSON user upload thiếu toàn bộ các trường `name`/`identifier`/`tasks` hoặc không parse được.
+  * `session=None`.
+
+* **Bước**
+
+  1. User upload file + nhắn: **“Tạo project từ file này”**.
+  2. Bot cố gắng parse.
+  3. Không tìm thấy đủ dữ liệu project.
+
+* **Kỳ vọng**
+
+  * Bot trả lỗi rõ ràng:
+
+    > “File không hợp lệ hoặc không tìm thấy thông tin dự án (name/identifier/tasks). Vui lòng kiểm tra lại file.”
+  * Không mở session (`session=None`).
+
+---
+
+### TC10 – Xác nhận “có” sau khi tạo project
+
+* **Tiền điều kiện**
+
+  * Đang có session: `create_new_project` với payload project + danh sách task đã parse đúng.
+  * Bot vừa hỏi: “Bạn có muốn tạo project này không?”
+
+* **Bước**
+
+  1. User trả lời: **“Có”**.
+  2. Bot gọi API:
+
+     * `create_project` với name/identifier.
+     * Sau khi thành công, gọi `create_issue` cho từng task (đếm số task).
+  3. Bot nhận lại URL project (vd: `/projects/demo/board`).
+
+* **Kỳ vọng**
+
+  * Tất cả API tạo project + task gọi thành công (đúng số lượng).
+  * `session` được **clear** (`None`).
+  * Bot trả kết quả:
+
+    > “Đã tạo project Demo với 10 task. Bạn có thể truy cập tại: <URL>”
+
+---
+
+### TC11 – Xác nhận “không” sau khi tạo project
+
+* **Tiền điều kiện**
+
+  * Session `create_new_project` đang active.
+  * Bot đang chờ confirm.
+
+* **Bước**
+
+  1. User trả lời: **“Không”**.
+  2. Bot không gọi bất kỳ API tạo project/task nào.
+  3. Bot xoá session.
+
+* **Kỳ vọng**
+
+  * Không có thay đổi dữ liệu trên Plane.
+  * `session` chuyển về `None`.
+  * Bot trả lời:
+
+    > “Đã hủy thao tác tạo project.”
+
+---
+
+### TC12 – Đổi chủ đề giữa chừng trong session create
+
+* **Tiền điều kiện**
+
+  * Session `create_new_project` đang active, vừa hỏi “Bạn có muốn tạo project này không?”.
+  * Hệ thống đang chờ confirm.
+
+* **Bước – Nhánh 1 (user hỏi thời tiết, chọn không hủy)**
+
+  1. User gửi: **“Thời tiết hôm nay thế nào?”**
+  2. Bot **không** xử lý ngay câu hỏi thời tiết, mà hỏi lại:
+
+     > “Bạn đang trong luồng tạo project. Bạn có muốn hủy thao tác này để chuyển sang câu hỏi mới không (có/không)?”
+  3. User trả lời: **“Không”**.
+  4. Bot giữ nguyên session, nhắc lại câu hỏi confirm:
+
+     > “Ok, chúng ta tiếp tục. Bạn có muốn tạo project này không (có/không)?”
+
+* **Kỳ vọng Nhánh 1**
+
+  * Session **không** bị clear.
+  * Bot không trả lời thông tin thời tiết.
+  * Vẫn tiếp tục luồng tạo project.
+
+* **Bước – Nhánh 2 (user chọn có hủy)**
+
+  1. Từ bước 2 ở trên, user trả lời: **“Có”**.
+  2. Bot clear session `create_new_project`.
+  3. Bot chuyển sang xử lý intent mới: câu hỏi thời tiết.
+
+* **Kỳ vọng Nhánh 2**
+
+  * `session=None`.
+  * Không gọi API create_project.
+  * Bot trả lời thông tin thời tiết bình thường.
+
+---
+
+## 3. Cập nhật project / task / member
+
+### TC13 – Đổi mô tả project hợp lệ (confirm “có”)
+
+* **Tiền điều kiện**
+
+  * Project “Demo” tồn tại, có field `description`.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Đổi mô tả project Demo thành ‘Dự án demo cho khách A’.”**
+  2. Bot phân tích:
+
+     * intent = update project
+     * field = description
+     * project = Demo
+  3. Bot tìm project Demo qua API → tồn tại.
+  4. Bot set session `update_existing_information` với payload (project=Demo, field=description, new_value=…).
+  5. Bot hỏi xác nhận:
+
+     > “Bạn xác nhận đổi mô tả project Demo thành ‘Dự án demo cho khách A’ chứ (có/không)?”
+  6. User: **“Có”**.
+  7. Bot gọi API `update_project` với description mới.
+  8. Sau khi thành công, clear session.
+
+* **Kỳ vọng**
+
+  * Project Demo có description được cập nhật đúng.
+  * `session` reset về `None`.
+  * Bot trả:
+
+    > “Đã cập nhật mô tả project Demo thành công.”
+
+---
+
+### TC14 – Đổi mô tả project hợp lệ (confirm “không”)
+
+* **Tiền điều kiện**
+
+  * Giống TC13 đến bước hỏi xác nhận.
+  * `session=update_existing_information`.
+
+* **Bước**
+
+  1. User: **“Không”**.
+  2. Bot **không** gọi `update_project`.
+  3. Bot clear session.
+
+* **Kỳ vọng**
+
+  * Dữ liệu project **không thay đổi**.
+  * `session=None`.
+  * Bot trả:
+
+    > “Đã hủy thao tác cập nhật.”
+
+---
+
+### TC15 – Field không hợp lệ khi update project
+
+* **Tiền điều kiện**
+
+  * Project Demo tồn tại.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Cập nhật budget project Demo lên 1000$.”**
+  2. Bot parse intent:
+
+     * entity = project Demo
+     * field yêu cầu = `budget`.
+  3. Kiểm tra field `budget`:
+
+     * Không nằm trong danh sách field hỗ trợ (vd: name, description, priority…).
+  4. Bot phản hồi hoặc yêu cầu sửa.
+
+* **Kỳ vọng**
+
+  * Bot báo rõ:
+
+    > “Hiện tại mình chưa hỗ trợ cập nhật field ‘budget’ cho project Demo. Bạn có thể đổi name/description/status…”
+  * Có thể:
+
+    * Giữ `session=update_existing_information` hoặc `waiting_info` để user điều chỉnh field, **theo đúng design của Thưởng**.
+  * Không gọi API update.
+
+---
+
+### TC16 – Update task tồn tại
+
+* **Tiền điều kiện**
+
+  * Project “Demo” tồn tại.
+  * Task “Task A” trong Demo tồn tại, có trường `priority`.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Đổi priority Task A trong Demo thành high.”**
+  2. Bot phân tích:
+
+     * entity = task
+     * project = Demo
+     * task_name = Task A
+     * field = priority
+     * new_value = high
+  3. Bot gọi API lấy task theo project + tên → tìm thấy 1 task.
+  4. Bot set session `update_existing_information` với payload task + field + new value.
+  5. Bot hỏi xác nhận:
+
+     > “Bạn xác nhận đổi priority của Task A trong Demo thành high chứ (có/không)?”
+  6. User: **“Có”**.
+  7. Bot gọi `update_issue` cho Task A (field priority=high).
+  8. Clear session.
+
+* **Kỳ vọng**
+
+  * Task A có priority = high sau khi update.
+  * `session=None`.
+  * Bot trả thông báo thành công.
+
+---
+
+### TC17 – Update task không tồn tại
+
+* **Tiền điều kiện**
+
+  * Project “Demo” tồn tại.
+  * Không có task tên “Task Unknown”.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Đổi priority Task Unknown trong Demo thành high.”**
+  2. Bot gọi API tìm task theo tên, kết quả rỗng.
+  3. Bot xử lý lỗi.
+
+* **Kỳ vọng**
+
+  * Bot báo:
+
+    > “Không tìm thấy task ‘Task Unknown’ trong project Demo. Bạn kiểm tra lại tên task được không?”
+  * Có thể giữ `session=update_existing_information` với trạng thái cần user sửa tên task, hoặc `waiting_info`.
+  * Không gọi `update_issue`.
+
+---
+
+### TC18 – Add member email hợp lệ vào project
+
+* **Tiền điều kiện**
+
+  * Project “Demo” tồn tại.
+  * Member `alice@example.com` đã tồn tại trong workspace, nhưng chưa là member của project Demo.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Thêm [alice@example.com](mailto:alice@example.com) vào Demo.”**
+  2. Bot tìm:
+
+     * Project Demo.
+     * Member [alice@example.com](mailto:alice@example.com) trong workspace → tồn tại.
+  3. Bot set session `update_existing_information` (hoặc type riêng cho membership) với payload (action=add_member_to_project, project=Demo, member_email=[alice@example.com](mailto:alice@example.com)).
+  4. Bot hỏi xác nhận:
+
+     > “Bạn xác nhận thêm [alice@example.com](mailto:alice@example.com) vào project Demo (có/không)?”
+  5. User: **“Có”**.
+  6. Bot gọi API `add_member_to_project`.
+  7. Clear session.
+
+* **Kỳ vọng**
+
+  * [alice@example.com](mailto:alice@example.com) trở thành member của Demo.
+  * `session=None`.
+  * Bot trả:
+
+    > “Đã thêm [alice@example.com](mailto:alice@example.com) vào project Demo.”
+
+---
+
+### TC19 – Add member email không tồn tại trong workspace
+
+* **Tiền điều kiện**
+
+  * Email `fake@example.com` không tồn tại trong workspace.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Thêm [fake@example.com](mailto:fake@example.com) vào Demo.”**
+  2. Bot gọi API tìm member theo email → không thấy.
+  3. Bot xử lý.
+
+* **Kỳ vọng**
+
+  * Bot báo ngay:
+
+    > “Email [fake@example.com](mailto:fake@example.com) không tồn tại trong workspace nên không thể thêm vào project Demo.”
+  * Không mở session (vì không thể tiếp tục).
+  * Không gọi API `add_member_to_project`.
+
+---
+
+### TC20 – Remove member bằng UUID/email (tồn tại)
+
+* **Tiền điều kiện**
+
+  * Workspace có member với UUID `83d6...` (hoặc email cụ thể).
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Xóa member 83d6… khỏi workspace.”** (hoặc dùng email).
+  2. Bot lookup member theo UUID/email → tìm thấy.
+  3. Bot set session với action = `remove_member_from_workspace`.
+  4. Bot hỏi:
+
+     > “Bạn xác nhận xóa member 83d6… khỏi workspace (có/không)?”
+  5. User: **“Có”**.
+  6. Bot gọi API `remove_member_from_workspace`.
+  7. Clear session.
+
+* **Kỳ vọng**
+
+  * Member bị xóa khỏi workspace.
+  * `session=None`.
+  * Bot báo thành công.
+
+---
+
+### TC21 – Remove member không tồn tại
+
+* **Tiền điều kiện**
+
+  * UUID/email input không match member nào.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Xóa member [abc@none.com](mailto:abc@none.com) khỏi workspace.”**
+  2. Bot lookup member → không có.
+  3. Bot xử lý.
+
+* **Kỳ vọng**
+
+  * Bot trả:
+
+    > “Không tìm thấy member [abc@none.com](mailto:abc@none.com) trong workspace nên không thể xóa.”
+  * `session=None`.
+
+---
+
+### TC22 – Confirmation có/không + chat lạc đề trong session update
+
+* **Tiền điều kiện**
+
+  * Session `update_existing_information` đang chờ confirm (vd: đổi mô tả project, update task…).
+
+* **Nhánh 1 – User trả “có”**
+
+  1. User: **“Có”**.
+
+  2. Bot gọi API tương ứng (update_project / update_issue / remove_member…).
+
+  3. Clear session.
+
+  * **Kỳ vọng**
+
+    * Thao tác thực thi thành công.
+    * `session=None`.
+
+* **Nhánh 2 – User trả “không”**
+
+  1. User: **“Không”**.
+
+  2. Bot không gọi API, chỉ clear session.
+
+  * **Kỳ vọng**
+
+    * Không thay đổi dữ liệu.
+    * `session=None`.
+
+* **Nhánh 3 – User chat lạc đề (“thời tiết?”)**
+
+  1. User: **“Thời tiết?”** trong khi bot đang chờ confirm.
+
+  2. Bot phản hồi:
+
+     > “Bạn đang trong luồng cập nhật dữ liệu. Bạn có muốn hủy thao tác này để chuyển sang câu hỏi mới không (có/không)?”
+
+  3. Nếu user: **“Không”** → giữ session, nhắc lại câu hỏi confirm.
+
+  4. Nếu user: **“Có”** → clear session rồi trả lời câu hỏi “thời tiết?”.
+
+  * **Kỳ vọng**
+
+    * Hành vi đúng như logic hủy/không hủy.
+    * Không vừa update vừa trả lời câu hỏi lạc đề.
+
+---
+
+## 4. Assignment (giao task)
+
+### TC23 – Assign khi còn task chưa assign
+
+* **Tiền điều kiện**
+
+  * Project “Demo” tồn tại.
+  * Có ít nhất 1 task trong Demo có `assignee = None`.
+  * Trong project Demo có danh sách member khả dụng.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Giao task trống trong Demo cho team.”**
+  2. Bot hiểu intent = assignment:
+
+     * Project = Demo
+     * Task target = các task chưa có assignee.
+  3. Bot liệt kê các task chưa assign, và list member candidate.
+  4. Bot có thể hỏi:
+
+     > “Demo có 3 task chưa assign: Task A, Task B, Task C. Bạn muốn giao cho ai? (ví dụ: [alice@example.com](mailto:alice@example.com))”
+     > **hoặc** gợi ý auto-assign (tùy design).
+  5. User: **“Giao hết cho [alice@example.com](mailto:alice@example.com)”** hoặc **“Có”** với đề xuất của bot.
+  6. Bot gọi `update_issue` set `assignee` cho các task trống.
+  7. Clear session.
+
+* **Kỳ vọng**
+
+  * Tất cả task trống được gán assignee đúng.
+  * `session=None`.
+  * Bot báo số task đã assign, kèm người được giao.
+
+---
+
+### TC24 – Không còn task trống để assign
+
+* **Tiền điều kiện**
+
+  * Tất cả task trong Demo đều đã có `assignee != None`.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Giao task trống trong Demo cho team.”**
+  2. Bot kiểm tra task chưa assign → 0 task.
+  3. Bot trả lời.
+
+* **Kỳ vọng**
+
+  * Bot nói:
+
+    > “Hiện tại tất cả task trong Demo đều đã có người nhận, không còn task trống để giao.”
+  * `session=None`.
+
+---
+
+### TC25 – Project không tồn tại khi assignment
+
+* **Tiền điều kiện**
+
+  * Không có project “Project Unknown”.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Assign task X trong Project Unknown cho team.”**
+  2. Bot gọi API tìm project → không thấy.
+  3. Bot xử lý.
+
+* **Kỳ vọng**
+
+  * Bot trả:
+
+    > “Không tìm thấy project ‘Project Unknown’. Bạn kiểm tra lại tên project được không?”
+  * Có thể giữ session ở trạng thái `waiting_info` để user sửa tên project nếu design như vậy.
+  * Không gọi `update_issue`.
+
+---
+
+### TC26 – Chat lạc đề trong session assignment
+
+* **Tiền điều kiện**
+
+  * Session `assignment` đang active (vd: bot vừa liệt kê task trống, đang chờ user chọn member/confirm).
+  * Bot chờ confirm/gợi ý.
+
+* **Bước**
+
+  1. User: **“Thời tiết hôm nay?”**
+  2. Bot hỏi lại:
+
+     > “Bạn đang trong luồng giao task. Bạn có muốn hủy luồng này để chuyển sang câu hỏi mới không (có/không)?”
+  3. Nếu **“Không”**:
+
+     * Giữ session assignment.
+     * Bot nhắc lại:
+
+       > “Ok, ta tiếp tục giao task. Bạn muốn giao các task trống cho ai?”
+  4. Nếu **“Có”**:
+
+     * Bot clear session assignment.
+     * Bot trả lời câu hỏi thời tiết.
+
+* **Kỳ vọng**
+
+  * Hành vi đúng như logic hủy/tiếp tục.
+  * Không vừa assign vừa trả lời chủ đề khác.
+
+---
+
+### TC27 – Assignment sau khi thêm member mới
+
+* **Tiền điều kiện**
+
+  * Project “Demo” tồn tại.
+  * Workspace có member mới `bob@example.com` vừa được add vào project Demo (qua testcase kiểu TC18).
+  * Có task chưa assign trong Demo.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Assign task trống trong Demo cho team.”**
+  2. Bot gọi API:
+
+     * Lấy danh sách task chưa assign.
+     * Lấy danh sách member của project Demo (đã bao gồm [bob@example.com](mailto:bob@example.com)).
+  3. Bot gợi ý danh sách candidate:
+
+     > “Các member trong Demo: [alice@example.com](mailto:alice@example.com), [bob@example.com](mailto:bob@example.com), … Bạn muốn giao cho ai?”
+  4. User: **“Giao cho [bob@example.com](mailto:bob@example.com).”**
+  5. Bot gọi `update_issue` set `assignee=bob@example.com` cho các task trống (theo logic).
+  6. Clear session.
+
+* **Kỳ vọng**
+
+  * Danh sách candidate **có chứa** member mới [bob@example.com](mailto:bob@example.com).
+  * Task được gán cho [bob@example.com](mailto:bob@example.com) thành công.
+  * `session=None`.
+
+---
+
+## 5. Bổ sung QA session – các câu hỏi liệt kê/chi tiết
+
+### TC28 – Liệt kê tất cả project
+
+* **Tiền điều kiện**
+
+  * Workspace có sẵn tối thiểu 3 project (vd: Demo, Nhận diện khuôn mặt Spa, HRIS).
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Hiện tại tôi đang có những project nào?”**
+  2. Bot gọi API `list_projects` lấy danh sách.
+  3. Bot trả về danh sách tên project (có thể kèm identifier).
+
+* **Kỳ vọng**
+
+  * Tất cả project hiện có được liệt kê, không thiếu/khác tên.
+  * Không yêu cầu confirm, không mở session (`session=None`).
+
+---
+
+### TC29 – Liệt kê task trong một project
+
+* **Tiền điều kiện**
+
+  * Project **“Nhận diện khuôn mặt Spa”** tồn tại, có >=3 task.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Trong project Nhận diện khuôn mặt Spa có những task nào?”**
+  2. Bot resolve project → gọi `list_issues(project_id=...)`.
+  3. Bot liệt kê danh sách task (tên, có thể kèm trạng thái/assignee).
+
+* **Kỳ vọng**
+
+  * Danh sách task thuộc đúng project “Nhận diện khuôn mặt Spa”, không lẫn project khác.
+  * Không mở session (`session=None`).
+
+---
+
+### TC30 – Chi tiết một task
+
+* **Tiền điều kiện**
+
+  * Task **“Thu thập dữ liệu, training mô hình khoanh vùng đồng phục”** tồn tại trong project “Nhận diện khuôn mặt Spa”.
+  * Task có các trường: `state`, `priority`, `start_date`, `target_date`, `assignee`, `description`.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Nói chi tiết về task ‘Thu thập dữ liệu, training mô hình khoanh vùng đồng phục’.”**
+  2. Bot tìm task theo tên (đúng project), lấy chi tiết.
+  3. Bot trả lời kèm: trạng thái, ưu tiên, thời gian, assignee, mô tả.
+
+* **Kỳ vọng**
+
+  * Thông tin khớp với dữ liệu task thực tế (không bịa).
+  * Nếu có nhiều task trùng tên ở project khác, bot chọn đúng task trong “Nhận diện khuôn mặt Spa” hoặc hỏi làm rõ.
+  * `session=None`.
+
+---
+
+### TC31 – Liệt kê member trong workspace
+
+* **Tiền điều kiện**
+
+  * Workspace có danh sách member (tên/email/role).
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Hiện tại trong workspace đang có những thành viên nào?”**
+  2. Bot gọi `list_members`.
+  3. Bot trả danh sách member (tên + email, có thể kèm role).
+
+* **Kỳ vọng**
+
+  * Liệt kê đủ member đang có trong workspace.
+  * Không mở session (`session=None`).
+
+---
+
+### TC32 – Liệt kê member trong một project
+
+* **Tiền điều kiện**
+
+  * Project **“Nhận diện khuôn mặt Spa”** tồn tại với >=2 member.
+  * `session=None`.
+
+* **Bước**
+
+  1. User: **“Trong project Nhận diện khuôn mặt Spa có những member nào?”**
+  2. Bot resolve project → gọi `list_project_members(project_id=...)` (fallback `list_members` nếu API 404).
+  3. Bot trả danh sách member thuộc project đó (tên/email/role).
+
+* **Kỳ vọng**
+
+  * Liệt kê đúng các member của project, không lẫn member ở project khác.
+  * Không mở session (`session=None`).
+
+---

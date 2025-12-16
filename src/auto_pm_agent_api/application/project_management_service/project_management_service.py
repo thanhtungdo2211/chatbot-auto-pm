@@ -512,6 +512,73 @@ class ProjectManagementService:
         affirmative_words = ["có", "yes", "ok", "đồng ý", "chắc chắn"]
         return any(word in query.lower() for word in affirmative_words)
 
+    def summarize_update_session(self, user_id: int) -> str:
+        """Tóm tắt trạng thái luồng update để bot nhắc lại cho người dùng."""
+        session = self.sessions.get(user_id, {})
+        status = session.get("status")
+        if not status:
+            return ""
+
+        if status == "waiting_info":
+            return (
+                "Bạn đang ở luồng cập nhật và bot đang chờ bạn bổ sung thông tin "
+                "(project/task/field/giá trị) trước khi xác nhận."
+            )
+
+        if status == "waiting_confirmation":
+            info = session.get("update_info") or {}
+            summary = self._format_update_summary(info)
+            if summary:
+                return f"Đang chờ bạn xác nhận: {summary}"
+
+        return ""
+
+    def _format_update_summary(self, info: dict) -> str:
+        """Sinh mô tả ngắn gọn cho yêu cầu update còn pending."""
+        action = (info or {}).get("action_type")
+        if not action:
+            return ""
+
+        if action == "add_member":
+            add = info.get("add_member") or {}
+            return (
+                f"Thêm member {add.get('email')} (role={add.get('role')}) "
+                f"vào project {add.get('project_name')}."
+            )
+
+        if action == "remove_member":
+            rm = info.get("remove_member") or {}
+            return f"Xóa member {rm.get('email') or rm.get('member_id')} khỏi workspace/project."
+
+        if action == "update_project":
+            return (
+                f"Cập nhật project '{info.get('project_name')}': "
+                f"{info.get('field')} -> {info.get('value')}."
+            )
+
+        if action == "delete_project":
+            return f"Xóa project '{info.get('project_name')}'."
+
+        if action == "create_task":
+            return f"Tạo task '{info.get('task_name')}' trong project '{info.get('project_name')}'."
+
+        if action == "update_task":
+            return (
+                f"Cập nhật task '{info.get('task_name')}' trong project '{info.get('project_name')}': "
+                f"{info.get('field')} -> {info.get('value')}."
+            )
+
+        if action == "delete_task":
+            return (
+                f"Xóa task '{info.get('task_name')}' khỏi project '{info.get('project_name')}'."
+            )
+
+        if action == "create_project":
+            return f"Tạo project '{info.get('project_name')}'."
+
+        return ""
+
+
     def _extract_update_request(
         self,
         query: str,

@@ -1,0 +1,48 @@
+=== upload_file_then_create ===
+status: 404
+response (json):
+{
+  "detail": "Not Found"
+}
+
+=== confirm_create_project ===
+status: 404
+response (json):
+{
+  "detail": "Not Found"
+}
+
+=== update_task_priority ===
+status: 404
+response (json):
+{
+  "detail": "Not Found"
+}
+
+=== add_member ===
+status: 404
+response (json):
+{
+  "detail": "Not Found"
+}
+
+=== assignment_suggestion ===
+status: 404
+response (json):
+{
+  "detail": "Not Found"
+}
+
+=== qa_query ===
+status: 404
+response (json):
+{
+  "detail": "Not Found"
+}
+
+=== small_talk ===
+status: 404
+response (json):
+{
+  "detail": "Not Found"
+}

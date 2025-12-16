@@ -1,0 +1,12 @@
+# One JSON object per line. Fields:
+# - name: label of the test
+# - payload: body sent to POST /chat
+# - description: (optional) human readable note
+# Lines starting with # are ignored.
+{"name": "upload_file_then_create", "payload": {"user_id": 1, "query": null, "file_content": "Thông tin dự án ABC, 3 task cần làm..."}, "description": "Upload file trước khi tạo project"}
+{"name": "confirm_create_project", "payload": {"user_id": 1, "query": "có"}, "description": "Xác nhận tạo project sau khi upload"}
+{"name": "update_task_priority", "payload": {"user_id": 2, "query": "Đổi priority task Checkout thành high trong project Demo"}, "description": "Cập nhật priority task"}
+{"name": "add_member", "payload": {"user_id": 3, "query": "Thêm alice@example.com vào project Alpha"}, "description": "Thêm thành viên vào project"}
+{"name": "assignment_suggestion", "payload": {"user_id": 4, "query": "Phân công các task trống trong project Alpha"}, "description": "Gợi ý phân công task"}
+{"name": "qa_query", "payload": {"user_id": 5, "query": "Project Alpha còn task nào chưa giao?"}, "description": "Hỏi thông tin hiện có"}
+{"name": "small_talk", "payload": {"user_id": 6, "query": "Kể chuyện cười đi"}, "description": "Chit-chat ngoài phạm vi công việc"}

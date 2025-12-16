@@ -1,0 +1,152 @@
+## Test case cho các session khác: Assignment, Update Info, Create New Task
+
+### Assignment session
+
+#### TC-AS-01 – Giao các task chưa có assignee trong 1 project
+* **Tiền điều kiện**
+  * Project “Demo” tồn tại, có ≥2 task với `assignee=None`.
+  * Project có ≥2 member hợp lệ.
+  * `session=None`.
+* **Bước**
+  1. User: **“Giao task trống trong Demo cho team.”**
+  2. Bot gọi `list_issues(project_id=Demo)` → lọc task chưa assign, gọi `list_project_members`.
+  3. Bot liệt kê task trống + hỏi muốn giao cho ai.
+  4. User: **“Giao hết cho alice@example.com.”**
+  5. Bot gọi `update_issue` set `assignee=alice@example.com` cho các task trống.
+  6. Bot clear session.
+* **Kỳ vọng**
+  * Tất cả task trống được gán cho alice@example.com.
+  * Không lỗi; `session=None` sau khi xong.
+
+#### TC-AS-02 – Không còn task trống để assign
+* **Tiền điều kiện**: Mọi task của “Demo” đã có assignee; `session=None`.
+* **Bước**
+  1. User: **“Giao task trống trong Demo cho team.”**
+  2. Bot thấy 0 task trống.
+* **Kỳ vọng**
+  * Bot trả: “Không còn task trống để giao.”
+  * Không mở session; không gọi update.
+
+#### TC-AS-03 – Project không tồn tại
+* **Tiền điều kiện**: Không có project “Unknown”; `session=None`.
+* **Bước**
+  1. User: **“Assign task trong Unknown cho team.”**
+  2. Bot gọi `list_projects`/resolve → không tìm thấy.
+* **Kỳ vọng**
+  * Bot báo không tìm thấy project, yêu cầu nhập lại.
+  * Không mở session; không gọi update.
+
+#### TC-AS-04 – Xử lý chat lạc đề khi đang chờ confirm
+* **Tiền điều kiện**
+  * Session `assignment` đang chờ user chọn member/confirm.
+* **Bước**
+  1. User: **“Thời tiết hôm nay?”**
+  2. Bot hỏi: “Bạn đang trong luồng giao task. Muốn hủy để trả lời câu hỏi mới không (có/không)?”
+  3. User: **“Không”** → bot giữ session, nhắc lại câu hỏi assign.
+* **Kỳ vọng**
+  * Session vẫn giữ; không thực thi update.
+
+#### TC-AS-05 – Member không tồn tại
+* **Tiền điều kiện**
+  * Project “Demo” tồn tại; email `fake@example.com` không thuộc member project/workspace.
+  * `session=None`.
+* **Bước**
+  1. User: **“Giao task trống trong Demo cho fake@example.com.”**
+  2. Bot tìm member → không thấy.
+* **Kỳ vọng**
+  * Bot báo không tìm thấy member; không gọi `update_issue`; `session=None`.
+
+---
+
+### Update Existing Information session
+
+#### TC-UP-01 – Update mô tả project (confirm “có”)
+* **Tiền điều kiện**: Project “Demo” tồn tại; `session=None`.
+* **Bước**
+  1. User: **“Đổi mô tả project Demo thành ‘Mô tả mới’.”**
+  2. Bot set session `update_existing_information` với payload (project=Demo, field=description, value=...).
+  3. User trả lời **“Có”**.
+  4. Bot gọi `update_project`; clear session.
+* **Kỳ vọng**
+  * Description được cập nhật; `session=None`.
+
+#### TC-UP-02 – Update task priority (confirm “có”)
+* **Tiền điều kiện**: Task “Task A” trong Demo tồn tại; `session=None`.
+* **Bước**
+  1. User: **“Đổi priority Task A trong Demo thành high.”**
+  2. Bot set session `update_existing_information` (task=Task A, field=priority, value=high).
+  3. User: **“Có”** → bot gọi `update_issue`; clear session.
+* **Kỳ vọng**
+  * Task A có priority=high; `session=None`.
+
+#### TC-UP-03 – Task không tồn tại
+* **Tiền điều kiện**: Không có task “Task Unknown” trong Demo; `session=None`.
+* **Bước**
+  1. User: **“Đổi priority Task Unknown trong Demo thành high.”**
+  2. Bot tìm task → không thấy.
+* **Kỳ vọng**
+  * Bot báo không tìm thấy task, yêu cầu kiểm tra tên; không mở/ghi session.
+
+#### TC-UP-04 – Field không hợp lệ
+* **Tiền điều kiện**: Project Demo tồn tại; `session=None`.
+* **Bước**
+  1. User: **“Cập nhật budget của Demo lên 1000$.”**
+  2. Bot map field → thấy `budget` không hỗ trợ.
+* **Kỳ vọng**
+  * Bot báo field không hỗ trợ, gợi ý field hợp lệ; không gọi API; không mở session hoặc đặt trạng thái chờ field hợp lệ tùy thiết kế.
+
+#### TC-UP-05 – Confirm “không”
+* **Tiền điều kiện**: Session `update_existing_information` đang chờ confirm (vd: đổi mô tả project).
+* **Bước**
+  1. User: **“Không”**.
+  2. Bot không gọi API, clear session.
+* **Kỳ vọng**
+  * Không thay đổi dữ liệu; `session=None`.
+
+---
+
+### Create New Task session
+
+#### TC-CT-01 – Bắt đầu tạo task mới trong project
+* **Tiền điều kiện**: Project “Demo” tồn tại; `session=None`.
+* **Bước**
+  1. User: **“Tạo task mới ‘Phân tích dữ liệu log’ trong project Demo, priority high, deadline 2024-10-30.”**
+  2. Bot trích xuất: action=create_task, project=Demo, task_name, description (nếu có), priority=high, target_date=2024-10-30.
+  3. Bot set session `create_new_task` (hoặc `update_plane_information` tùy code) với payload task.
+  4. Bot hỏi confirm: “Bạn xác nhận tạo task … (có/không)?”
+* **Kỳ vọng**
+  * Payload chứa đủ trường: project, name, priority, target_date; session được mở.
+
+#### TC-CT-02 – Confirm “có” tạo task
+* **Tiền điều kiện**: Session tạo task đang chờ confirm với payload hợp lệ.
+* **Bước**
+  1. User: **“Có”**.
+  2. Bot gọi `create_issue` cho project tương ứng với payload.
+  3. Bot clear session.
+* **Kỳ vọng**
+  * Task được tạo; `session=None`; bot trả kết quả (id/link nếu có).
+
+#### TC-CT-03 – Confirm “không”
+* **Tiền điều kiện**: Session tạo task đang chờ confirm.
+* **Bước**
+  1. User: **“Không”**.
+  2. Bot không gọi API; clear session.
+* **Kỳ vọng**
+  * Không tạo task; `session=None`.
+
+#### TC-CT-04 – Project không tồn tại khi tạo task
+* **Tiền điều kiện**: Không có project “Unknown”; `session=None`.
+* **Bước**
+  1. User: **“Tạo task X trong project Unknown.”**
+  2. Bot resolve project → không thấy.
+* **Kỳ vọng**
+  * Bot báo không tìm thấy project; không mở session hoặc đặt trạng thái chờ project hợp lệ.
+
+#### TC-CT-05 – Thiếu thông tin bắt buộc
+* **Tiền điều kiện**: `session=None`.
+* **Bước**
+  1. User: **“Tạo task mới đi”** (không tên/project).
+  2. Bot phát hiện thiếu `task_name` hoặc `project`.
+* **Kỳ vọng**
+  * Bot hỏi lại để lấy đủ thông tin (tên task, project, deadline/priority nếu cần).
+  * Chỉ mở session khi đủ tối thiểu field cần thiết; không gọi API trước khi đủ dữ liệu.

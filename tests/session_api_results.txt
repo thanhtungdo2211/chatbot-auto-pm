@@ -1,0 +1,75 @@
+API test run (fresh server, port 8989)
+
+1) QA: đếm project (user_id=201)
+Request: {"query":"Có bao nhiêu project hiện có?"}
+Response: "Hiện tại có 2 dự án đang có mặt: 1. Game Development 2. Nhận diện khuôn mặt Spa ... tổng cộng 2 project."
+
+2) QA: task theo trạng thái (user_id=202)
+Request: {"query":"Liệt kê task đang in progress"}
+Response: "không có task nào đang ở trạng thái in progress... tất cả ... 'chưa hoàn thành'."
+
+3) QA: task không tồn tại (user_id=203)
+Request: {"query":"Task XYZ là gì?"}
+Response: "Không có thông tin về Task XYZ..."
+
+4) Update project yêu cầu thêm thông tin (user_id=204)
+Request: {"query":"Đổi mô tả project Game Development"}
+Response: "Vui lòng cung cấp project (id/identifier/tên)." (LLM không trích được project/giá trị mới; session không thiết lập)
+
+5) Add member email không thuộc workspace (user_id=205)
+Request: {"query":"Thêm member newuser10@example.com vào project Game Development"}
+Response: "Email ... không tồn tại trong workspace. Vui lòng kiểm tra lại hoặc thêm thành viên vào workspace trước."
+
+6) Assignment gợi ý (user_id=206)
+Request: {"query":"Giao task trống trong project Game Development cho team"}
+Response: Gợi ý phân công 6 task giữa tung.0982548086 và thang, kèm lý do cân bằng workload. (Có prompt xác nhận giao)
+
+7) QA chi tiết task (user_id=207)
+Request: {"query":"Trạng thái task a?"}
+Response: "Trạng thái của task \"a\" trong dự án Game Development là \"chưa hoàn thành\"."
+
+--- Test run 2 (fresh server, user_ids 301-306) ---
+1) QA: đếm project
+Request: {"query":"Có bao nhiêu project hiện có?"}
+Response: "Hiện tại có 2 dự án..."
+
+2) QA: task theo trạng thái
+Request: {"query":"Liệt kê task đang in progress"}
+Response: "không có task nào ... in progress... tất cả 'chưa hoàn thành'."
+
+3) QA: task không tồn tại
+Request: {"query":"Task XYZ là gì?"}
+Response: "Không có thông tin nào về \"Task XYZ\"..."
+
+4) Add member email không thuộc workspace
+Request: {"query":"Thêm member newuser10@example.com vào project Game Development"}
+Response: "Email ... không tồn tại trong workspace..."
+
+5) Assignment gợi ý
+Request: {"query":"Giao task trống trong project Game Development cho team"}
+Response: Gợi ý phân công 6 task giữa tung.0982548086 và thang, lý do cân bằng workload, kèm prompt xác nhận.
+
+6) QA chi tiết task
+Request: {"query":"Trạng thái task a?"}
+Response: "Task \"a\" ... trạng thái \"chưa hoàn thành\"."
+
+--- Test run 3 (fresh server, user_ids 401-405) ---
+1) QA: đếm project
+Request: {"query":"Có bao nhiêu project hiện có?"}
+Response: "Hiện tại có 2 dự án đang tồn tại... tổng số lượng dự án hiện có là 2."
+
+2) QA: đếm task
+Request: {"query":"Có bao nhiêu task hiện có?"}
+Response: "Hiện có tổng cộng 9 task... Game Development: 6; Nhận diện khuôn mặt Spa: 3."
+
+3) QA: liệt kê members
+Request: {"query":"Trong workspace có những member nào?"}
+Response: liệt kê 3 member (tung..., thang, testuser2) với email, vai trò không rõ.
+
+4) QA: chi tiết task
+Request: {"query":"Trạng thái task a?"}
+Response: "Task \"a\" ... trạng thái \"chưa hoàn thành\"."
+
+5) QA: member/task không tồn tại
+Request: {"query":"Member abc@example.com đang làm gì?"}
+Response: "Không có thông tin về thành viên ... abc@example.com..."

@@ -1,5 +1,6 @@
 """Dependency injection for API endpoints."""
 
+import logging
 import os
 from functools import lru_cache
 from dotenv import load_dotenv
@@ -9,6 +10,7 @@ from auto_pm_agent_api.application.chat_service import ChatService
 from auto_pm_agent_api.application.project_management_service import ProjectManagementService
 from auto_pm_agent_api.application.qa_service import QAService
 from auto_pm_agent_api.application.assignment_service import AssignmentService
+from auto_pm_agent_api.application.report_service import WorkReportExtractor
 
 from auto_pm_agent_api.infrastructure.llm_providers import LLMClient
 from auto_pm_agent_api.infrastructure.db import RedisMemory, MemorySelectBot
@@ -17,6 +19,8 @@ from auto_pm_agent_api.infrastructure.plane_client import PlaneAPIClient
 
 # Load environment variables
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 class PlaneAPIFactory:
@@ -46,10 +50,32 @@ class PlaneAPIFactory:
             workspace_slug=self.workspace_slug
         )
 
+
+def _safe_llm_client() -> Optional[LLMClient]:
+    """Create LLM client if API key is configured; otherwise return None."""
+    has_key = os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY")
+    if not has_key:
+        logger.warning("LLM API key is missing; falling back to rule-based extraction.")
+        return None
+    try:
+        return LLMClient()
+    except Exception as exc:
+        logger.warning("Failed to initialize LLM client, will use rule-based only: %s", exc)
+        return None
+
+
 @lru_cache()
 def get_plane_factory() -> PlaneAPIFactory:
     """Get or create PlaneAPIFactory instance."""
     return PlaneAPIFactory()
+
+
+@lru_cache()
+def get_work_report_extractor() -> WorkReportExtractor:
+    """Get or create the work report extractor service."""
+    llm_client = LLMClient()
+    return WorkReportExtractor(llm_client)
+
 
 @lru_cache()
 def get_chat_service() -> ChatService:

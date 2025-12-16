@@ -2,12 +2,18 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional
 import logging
 
-from auto_pm_agent_api.infrastructure.api.models import ChatRequest, ChatResponse
-from auto_pm_agent_api.infrastructure.api.dependencies import get_chat_service
+from auto_pm_agent_api.infrastructure.api.models import (
+    ChatRequest,
+    ChatResponse,
+    WorkReportExtractRequest,
+    WorkReportExtractResponse,
+)
+from auto_pm_agent_api.infrastructure.api.dependencies import (
+    get_chat_service,
+    get_work_report_extractor,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -92,6 +98,38 @@ def chat_endpoint(request: ChatRequest):
             query=request.query,
             response="Xin lỗi, đã xảy ra lỗi khi xử lý yêu cầu của bạn.",
             success=False,
+            error=str(e)
+        )
+
+
+@app.post("/reports/extract", response_model=WorkReportExtractResponse)
+def extract_work_report(request: WorkReportExtractRequest):
+    """
+    Extract work report content into structured JSON.
+    """
+    try:
+        logger.info("Received work report extraction request")
+        extractor = get_work_report_extractor()
+        data = extractor.extract(request.content)
+        return WorkReportExtractResponse(
+            success=True,
+            data=data,
+            message="Trích xuất báo cáo thành công"
+        )
+    except ValueError as e:
+        logger.warning("Invalid work report payload: %s", e)
+        return WorkReportExtractResponse(
+            success=False,
+            data=None,
+            message="Nội dung không đúng yêu cầu",
+            error=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error extracting work report: {e}", exc_info=True)
+        return WorkReportExtractResponse(
+            success=False,
+            data=None,
+            message="Không thể trích xuất báo cáo",
             error=str(e)
         )
 

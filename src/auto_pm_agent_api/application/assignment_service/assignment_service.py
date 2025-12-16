@@ -212,18 +212,41 @@ class AssignmentService:
                 workload[assignee] += 1
         return workload
 
-    def _fetch_member_profile(self, email: Optional[str]) -> Optional[Dict[str, Any]]:
-        """Fetch member profile from external service (e.g., Zalo webhook)."""
-        base_url = os.getenv("ZALO_WEBHOOK_BASE_URL")
-        if not base_url or not email:
+    def _fetch_member_profile(
+        self, member_id: Optional[str], email: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Fetch member profile from user service using member id; fallback by email."""
+        base_url = os.getenv("USER_SERVICE_BASE_URL") or os.getenv("ZALO_WEBHOOK_BASE_URL")
+        if not base_url:
             return None
-        url = f"{base_url.rstrip('/')}/users/email/{email}"
+
+        # Prefer user_id when available in member.id, otherwise fallback to email-based endpoint
+        if member_id:
+            url = f"{base_url.rstrip('/')}/api/users/{member_id}/with-zalo/"
+        else:
+            url = None
+
         try:
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            if isinstance(data, dict) and data.get("status") == "success":
-                return data.get("user")
+            if url:
+                response = requests.get(url, timeout=10)
+                if response.status_code == 404:
+                    return None
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            logger.warning("Không lấy được profile từ user service cho %s: %s", member_id, e)
+
+        # Fallback to email-based webhook if available
+        email_url = None
+        if email and base_url:
+            email_url = f"{base_url.rstrip('/')}/users/email/{email}"
+        try:
+            if email_url:
+                response = requests.get(email_url, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                if isinstance(data, dict) and data.get("status") == "success":
+                    return data.get("user")
         except Exception as e:
             logger.warning("Không lấy được profile từ webhook cho %s: %s", email, e)
         return None
@@ -232,17 +255,22 @@ class AssignmentService:
         """Combine Plane members with external profile data."""
         enriched = []
         for member in members:
-            profile = self._fetch_member_profile(member.email)
+            profile = self._fetch_member_profile(member.id or member.email, email=member.email)
+            zalo_meta = (profile or {}).get("zalo_metadata") or (profile or {}).get("cv_data") or {}
             enriched.append(
                 {
                     "id": member.id,
-                    "name": member.display_name,
+                    "name": (
+                        (profile or {}).get("display_name")
+                        or f"{(profile or {}).get('first_name', '')} {(profile or {}).get('last_name', '')}".strip()
+                        or member.display_name
+                    ),
                     "email": member.email,
                     "role": member.role,
                     "workload": workload.get(member.id, 0),
-                    "skills": (profile or {}).get("skills", []),
-                    "experience_years": (profile or {}).get("cv_data", {}).get("experience_years"),
-                    "experience_level": (profile or {}).get("cv_data", {}).get("experience_level"),
+                    "skills": zalo_meta.get("skills", []) or (profile or {}).get("skills", []),
+                    "experience_years": zalo_meta.get("experience_years"),
+                    "experience_level": zalo_meta.get("experience_level"),
                 }
             )
         return enriched
