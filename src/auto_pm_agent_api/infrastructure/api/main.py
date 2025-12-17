@@ -78,17 +78,20 @@ def chat_endpoint(request: ChatRequest):
         chat_service = get_chat_service()
         
         # Handle the query
-        response = chat_service.handle_query(
+        response_text, mode_report = chat_service.handle_query(
             user_id=request.user_id,
+            role=request.role,
             query=request.query,
-            file_content=request.file_content
+            file_content=request.file_content,
+            mode_report=request.mode_report,
         )
         
         return ChatResponse(
             user_id=request.user_id,
             query=request.query,
-            response=response,
-            success=True
+            response=response_text,
+            success=True,
+            mode_report=mode_report,
         )
         
     except Exception as e:
@@ -98,7 +101,8 @@ def chat_endpoint(request: ChatRequest):
             query=request.query,
             response="Xin lỗi, đã xảy ra lỗi khi xử lý yêu cầu của bạn.",
             success=False,
-            error=str(e)
+            error=str(e),
+            mode_report=request.mode_report,
         )
 
 

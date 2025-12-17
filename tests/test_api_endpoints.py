@@ -14,11 +14,11 @@ class DummyChatService:
         self.calls = []
         self.cleared = []
 
-    def handle_query(self, user_id, query=None, file_content=None):
-        self.calls.append((user_id, query, file_content))
+    def handle_query(self, user_id, role="manager", query=None, file_content=None, mode_report=False):
+        self.calls.append((user_id, role, query, file_content, mode_report))
         if self.raise_on_chat:
             raise RuntimeError("chat boom")
-        return self.response
+        return self.response, mode_report
 
     def clear_history(self, user_id):
         self.cleared.append(user_id)
@@ -83,7 +83,8 @@ def test_chat_endpoint_success_with_query(make_client):
     assert body["success"] is True
     assert body["response"] == "handled"
     assert body["user_id"] == 1
-    assert service.calls == [(1, "hello world", None)]
+    assert body["mode_report"] is False
+    assert service.calls == [(1, "manager", "hello world", None, False)]
 
 
 def test_chat_endpoint_success_with_file_only(make_client):
@@ -100,7 +101,8 @@ def test_chat_endpoint_success_with_file_only(make_client):
     assert body["success"] is True
     assert body["response"] == "file received"
     assert body["user_id"] == 2
-    assert service.calls == [(2, None, "data from file")]
+    assert body["mode_report"] is False
+    assert service.calls == [(2, "manager", None, "data from file", False)]
 
 
 def test_chat_endpoint_failure_returns_error(make_client):
@@ -114,7 +116,7 @@ def test_chat_endpoint_failure_returns_error(make_client):
     assert body["success"] is False
     assert "Xin lỗi" in body["response"]
     assert "chat boom" in body["error"]
-    assert service.calls == [(3, "hi", None)]
+    assert service.calls == [(3, "manager", "hi", None, False)]
 
 
 def test_clear_memory_success(make_client):

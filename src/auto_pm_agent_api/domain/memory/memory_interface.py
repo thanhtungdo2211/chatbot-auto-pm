@@ -40,19 +40,3 @@ class MemoryInterface(ABC):
             user_id: User identifier
         """
         pass
-
-    @abstractmethod
-    def select_relevant_history(
-        self, user_id: int, query: str, max_messages: int = 5
-    ) -> ConversationHistory:
-        """Select relevant messages from history based on query.
-        
-        Args:
-            user_id: User identifier
-            query: Current user query
-            max_messages: Maximum messages to return
-            
-        Returns:
-            ConversationHistory with relevant messages
-        """
-        pass

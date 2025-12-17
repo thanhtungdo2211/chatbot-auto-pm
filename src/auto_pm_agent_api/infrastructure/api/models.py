@@ -10,17 +10,21 @@ class ChatRequest(BaseModel):
     """Request model for chat endpoint."""
     
     user_id: int = Field(..., description="Unique user identifier")
+    role: str = Field("manager", description="User role: manager | staff")
     query: Optional[str] = Field(None, description="User query text")
     file_content: Optional[str] = Field(None, description="File content for project creation")
     long_memory: Optional[str] = Field(None, description="Optional long-term memory context")
+    mode_report: bool = Field(False, description="Whether the user is in report mode")
 
     class Config:
         schema_extra = {
             "example": {
                 "user_id": 123,
+                "role": "manager",
                 "query": "Tạo project mới từ file này",
                 "file_content": None,
-                "long_memory": None
+                "long_memory": None,
+                "mode_report": False
             }
         }
 
@@ -33,6 +37,7 @@ class ChatResponse(BaseModel):
     response: str = Field(..., description="Chatbot response")
     success: bool = Field(True, description="Whether the request was successful")
     error: Optional[str] = Field(None, description="Error message if any")
+    mode_report: bool = Field(False, description="Current report mode flag")
 
     class Config:
         schema_extra = {
@@ -41,7 +46,8 @@ class ChatResponse(BaseModel):
                 "query": "Tạo project mới",
                 "response": "Tôi đã tạo project thành công!",
                 "success": True,
-                "error": None
+                "error": None,
+                "mode_report": False
             }
         }
 

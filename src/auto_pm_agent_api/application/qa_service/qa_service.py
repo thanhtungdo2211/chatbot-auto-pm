@@ -321,6 +321,8 @@ class GraphStructuredRetriever:
         for item in data:
             if item.get("type") == "issue":
                 project = (item.get("project_name") or "").lower()
+                if not project:
+                    continue
                 if project not in graph:
                     graph[project] = {
                         "name": item.get("project_name") or "",
@@ -333,6 +335,9 @@ class GraphStructuredRetriever:
         for item in data:
             if item.get("type") == "member":
                 project = (item.get("project_name") or "").lower()
+                # Bỏ qua members ở mức workspace để không tạo project ảo "workspace"
+                if not project or project == "workspace":
+                    continue
                 if project not in graph:
                     graph[project] = {
                         "name": item.get("project_name") or "",
@@ -493,7 +498,7 @@ class QAService:
         self.rag = HybridRAGRetriever()
         self.structured_rag = GraphStructuredRetriever(self.rag)
 
-    def handle_query(self, user_id: int, query: str) -> Tuple[Optional[str], str]:
+    def handle_query(self, user_id: int, query: str, assignee_filter: Optional[str] = None) -> Tuple[Optional[str], str]:
         """
         Handle a QA query about projects/tasks.
 
@@ -502,7 +507,7 @@ class QAService:
         """
         try:
             plane_api = self.plane_api_factory.get_api(user_id)
-            data = self._fetch_rag_data(plane_api)
+            data = self._fetch_rag_data(plane_api, assignee_filter=assignee_filter)
 
             if not data:
                 return None, (
@@ -533,12 +538,13 @@ class QAService:
             logger.error(f"Error in QA service: {exc}", exc_info=True)
             return None, f"Đã xảy ra lỗi khi xử lý câu hỏi: {str(exc)}"
 
-    def _fetch_rag_data(self, plane_api) -> List[Dict[str, Any]]:
+    def _fetch_rag_data(self, plane_api, assignee_filter: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Fetch and normalize project data for RAG.
         """
         data: List[Dict[str, Any]] = []
         project_lookup: Dict[str, str] = {}
+        member_map: Dict[str, Dict[str, Any]] = {}
 
         try:
             projects = plane_api.list_projects()
@@ -561,7 +567,10 @@ class QAService:
         for project in projects:
             project_name = getattr(project, "name", "") or "Không rõ tên dự án"
             try:
-                issues = plane_api.list_issues(project_id=getattr(project, "id"))
+                issues = plane_api.list_issues(
+                    project_id=getattr(project, "id"),
+                    assignee=assignee_filter if assignee_filter else None,
+                )
             except Exception as exc:
                 logger.warning(
                     "Could not fetch issues for project %s: %s", project_name, exc
@@ -569,24 +578,60 @@ class QAService:
                 continue
 
             for issue in issues:
-                data.append(self._normalize_issue(issue, project_name))
+                if assignee_filter:
+                    raw_assignees = getattr(issue, "assignees", None) or getattr(issue, "assignee", None) or []
+                    if isinstance(raw_assignees, str):
+                        raw_assignees = [raw_assignees]
+                    if assignee_filter not in raw_assignees:
+                        continue
+                data.append(self._normalize_issue(issue, project_name, member_map))
 
             members = self._safe_list_members(plane_api, getattr(project, "id"), project_name)
+            # cập nhật map để resolve assignees
+            for mem in members:
+                mid = mem.get("id")
+                if mid:
+                    member_map[mid] = mem
             data.extend(members)
 
         workspace_members = self._safe_workspace_members(plane_api)
         if workspace_members:
+            for mem in workspace_members:
+                mid = mem.get("id")
+                if mid and mid not in member_map:
+                    member_map[mid] = mem
             data.extend(workspace_members)
 
         return data
 
-    def _normalize_issue(self, issue: Any, project_name: str) -> Dict[str, Any]:
+    def _normalize_issue(self, issue: Any, project_name: str, member_map: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Normalize issue/task info for retrieval."""
         priority = getattr(issue, "priority", None) or "none"
         state = getattr(issue, "state", None) or "không rõ trạng thái"
         start_date = getattr(issue, "start_date", None)
         target_date = getattr(issue, "target_date", None)
         assignees = self._normalize_assignees(issue)
+
+        # Resolve assignee IDs to display/email if available
+        assignees_resolved = []
+        if member_map:
+            raw_ids = getattr(issue, "assignees", None) or getattr(issue, "assignee", None) or []
+            if isinstance(raw_ids, str):
+                raw_ids = [raw_ids]
+            for aid in raw_ids or []:
+                mem = member_map.get(aid) or {}
+                disp = mem.get("display_name") or mem.get("email") or aid
+                email = mem.get("email")
+                role = mem.get("role")
+                extra = []
+                if email:
+                    extra.append(email)
+                if role is not None:
+                    extra.append(f"role={role}")
+                if extra:
+                    assignees_resolved.append(f"{disp} ({', '.join(extra)})")
+                else:
+                    assignees_resolved.append(disp)
 
         return {
             "type": "issue",
@@ -598,6 +643,7 @@ class QAService:
             "target_date": target_date or "không rõ",
             "state_name": state,
             "assignees": assignees,
+            "assignees_resolved": assignees_resolved,
         }
 
     def _normalize_assignees(self, issue: Any) -> List[str]:

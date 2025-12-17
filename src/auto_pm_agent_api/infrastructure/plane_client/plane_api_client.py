@@ -23,23 +23,44 @@ class PlaneProject(BaseModel):
 
 
 class PlaneIssue(BaseModel):
-    """Plane issue model."""
+    """Plane issue/work item model."""
+
     id: str
     name: str
-    description: Optional[str] = None
     project: str
-    state: Optional[str] = None
+    # Common fields
+    description: Optional[str] = None
+    description_html: Optional[str] = None
+    description_stripped: Optional[str] = None
     priority: Optional[str] = None
-    assignee: Optional[str] = None
+    state: Optional[str] = None
+    start_date: Optional[str] = None
+    target_date: Optional[str] = None
+    estimate_point: Optional[Any] = None
+    sequence_id: Optional[int] = None
+    sort_order: Optional[float] = None
+    completed_at: Optional[Any] = None
+    archived_at: Optional[Any] = None
+    is_draft: Optional[bool] = None
+    created_by: Optional[str] = None
+    updated_by: Optional[str] = None
+    workspace: Optional[str] = None
+    parent: Optional[str] = None
+    assignee: Optional[str] = None  # for compatibility when API returns single
+    assignees: Optional[List[str]] = None  # when API returns list
+    labels: Optional[List[Any]] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    class Config:
+        extra = "allow"  # allow unknown fields for forward compatibility
 
 
 class PlaneMember(BaseModel):
     """Plane member model."""
     id: str
     member: Optional[Dict[str, Any]] = None
-    role: Optional[str] = None
+    role: Optional[Any] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     email: Optional[str] = None
@@ -110,6 +131,62 @@ class PlaneAPIClient:
     def _get_workspace_url(self) -> str:
         """Get workspace base URL."""
         return f"/api/v1/workspaces/{self.workspace_slug}"
+
+    def _get_workspace_url_v0(self) -> str:
+        """Legacy workspace base URL (no /v1), used for daily-progress endpoints per api-docs."""
+        return f"/api/workspaces/{self.workspace_slug}"
+
+    # Zalo user lookup
+    def get_user_by_zalo_id(self, zalo_user_id: str) -> Dict[str, Any]:
+        """Fetch Plane user by Zalo user id."""
+        url = f"/api/zalo-users/{zalo_user_id}/"
+        response = self.client.get(url)
+        return self._handle_response(response)
+
+    # -----------------------------
+    # Daily progress (issues)
+    # -----------------------------
+    def list_daily_progress(
+        self,
+        project_id: str,
+        issue_id: str,
+        day: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """List daily progress entries for an issue; supports optional filters."""
+        params: Dict[str, Any] = {}
+        if day:
+            params["day"] = day
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+
+        url = f"{self._get_workspace_url_v0()}/projects/{project_id}/issues/{issue_id}/daily-progress/"
+        response = self.client.get(url, params=params)
+        return self._handle_response(response)
+
+    def create_daily_progress(
+        self,
+        project_id: str,
+        issue_id: str,
+        payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        url = f"{self._get_workspace_url_v0()}/projects/{project_id}/issues/{issue_id}/daily-progress/"
+        response = self.client.post(url, json=payload)
+        return self._handle_response(response)
+
+    def update_daily_progress(
+        self,
+        project_id: str,
+        issue_id: str,
+        progress_id: str,
+        payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        url = f"{self._get_workspace_url_v0()}/projects/{project_id}/issues/{issue_id}/daily-progress/{progress_id}/"
+        response = self.client.patch(url, json=payload)
+        return self._handle_response(response)
     
     def _handle_response(self, response: httpx.Response) -> Dict[str, Any]:
         """Handle API response."""
@@ -296,11 +373,6 @@ class PlaneAPIClient:
         assignee: Optional[str] = None
     ) -> List[PlaneIssue]:
         """List issues with optional filters."""
-        if project_id:
-            url = f"{self._get_workspace_url()}/projects/{project_id}/issues/"  # Added trailing slash
-        else:
-            url = f"{self._get_workspace_url()}/issues/"  # Added trailing slash
-        
         params = {}
         if state:
             params["state"] = state
@@ -308,10 +380,30 @@ class PlaneAPIClient:
             params["priority"] = priority
         if assignee:
             params["assignee"] = assignee
-        
-        response = self.client.get(url, params=params)
-        data = self._handle_response(response)
-        return [PlaneIssue(**issue) for issue in data.get("results", [])]
+
+        # If project_id provided, hit single project endpoint
+        if project_id:
+            url = f"{self._get_workspace_url()}/projects/{project_id}/issues/"  # Added trailing slash
+            response = self.client.get(url, params=params)
+            data = self._handle_response(response)
+            return [PlaneIssue(**issue) for issue in data.get("results", [])]
+
+        # No project_id: iterate all projects to avoid 404 on workspace-level issues endpoint
+        issues: List[PlaneIssue] = []
+        projects = self.list_projects()
+        for proj in projects:
+            pid = getattr(proj, "id", None)
+            if not pid:
+                continue
+            url = f"{self._get_workspace_url()}/projects/{pid}/issues/"
+            try:
+                response = self.client.get(url, params=params)
+                data = self._handle_response(response)
+                issues.extend([PlaneIssue(**issue) for issue in data.get("results", [])])
+            except Exception as exc:
+                logger.warning("Could not fetch issues for project %s: %s", pid, exc)
+                continue
+        return issues
     
     def get_issue(self, project_id: str, issue_id: str) -> PlaneIssue:
         """Get issue by ID."""

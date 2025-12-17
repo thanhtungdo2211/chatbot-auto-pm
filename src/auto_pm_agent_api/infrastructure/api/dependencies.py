@@ -11,9 +11,10 @@ from auto_pm_agent_api.application.project_management_service import ProjectMana
 from auto_pm_agent_api.application.qa_service import QAService
 from auto_pm_agent_api.application.assignment_service import AssignmentService
 from auto_pm_agent_api.application.report_service import WorkReportExtractor
+from auto_pm_agent_api.application.report_session import ReportSessionManager
 
 from auto_pm_agent_api.infrastructure.llm_providers import LLMClient
-from auto_pm_agent_api.infrastructure.db import RedisMemory, MemorySelectBot
+from auto_pm_agent_api.infrastructure.db import RedisMemory
 from auto_pm_agent_api.infrastructure.llm_providers import Router, GeneralBot
 from auto_pm_agent_api.infrastructure.plane_client import PlaneAPIClient
 
@@ -88,16 +89,14 @@ def get_chat_service() -> ChatService:
     # Initialize infrastructure components
     llm_client = LLMClient()
     redis_memory = RedisMemory()
-    memory_select_bot = MemorySelectBot(llm_client)
     router = Router(llm_client)
     general_bot = GeneralBot(llm_client)
     plane_factory = PlaneAPIFactory()
     
-    # Wrap Redis memory with selector
-    class MemoryWithSelector:
-        def __init__(self, redis_mem, selector):
+    # Wrap Redis memory to implement MemoryInterface
+    class MemoryWrapper:
+        def __init__(self, redis_mem):
             self.redis = redis_mem
-            self.selector = selector
         
         def add_message(self, user_id, role, content):
             self.redis.add_message(user_id, role, content)
@@ -105,27 +104,23 @@ def get_chat_service() -> ChatService:
         def get_history(self, user_id, limit=None):
             from auto_pm_agent_api.domain.memory import ConversationHistory
             history = self.redis.get_history(user_id)
+            if limit:
+                history = history[-limit:]
             return ConversationHistory.from_list(user_id, history)
         
         def clear_history(self, user_id):
             self.redis.clear_history(user_id)
-        
-        def select_relevant_history(self, user_id, query, max_messages=5):
-            from auto_pm_agent_api.domain.memory import ConversationHistory
-            history = self.redis.get_history(user_id)
-            if not history:
-                return ConversationHistory(user_id=user_id, messages=[])
-            
-            selected = self.selector.get_memory_select(history, query)
-            return ConversationHistory.from_list(user_id, selected)
     
-    memory = MemoryWithSelector(redis_memory, memory_select_bot)
+    memory = MemoryWrapper(redis_memory)
     
     # Initialize application services
     project_service = ProjectManagementService(llm_client, plane_factory)
     qa_service = QAService(llm_client, plane_factory)
     assignment_service = AssignmentService(llm_client, plane_factory)
     
+    # Report session manager
+    report_manager = ReportSessionManager(general_bot, plane_factory)
+
     # Create and return chat service
     return ChatService(
         memory=memory,
@@ -133,5 +128,6 @@ def get_chat_service() -> ChatService:
         project_service=project_service,
         qa_service=qa_service,
         assignment_service=assignment_service,
-        general_bot=general_bot
+        general_bot=general_bot,
+        report_manager=report_manager,
     )

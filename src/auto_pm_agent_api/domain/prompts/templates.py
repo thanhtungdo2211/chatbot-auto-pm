@@ -124,32 +124,6 @@ Nếu câu hỏi không liên quan đến công việc/project, hãy trả lời
 Hãy trả lời:
 """
 
-# Memory selection prompt
-PROMPT_MEMORY_SELECT = """
-Bạn là một trợ lý AI chuyên lọc thông tin từ lịch sử hội thoại.
-
-📝 Lịch sử hội thoại đầy đủ:
-{full_history}
-
-❓ Câu hỏi hiện tại của người dùng:
-{query}
-
-🎯 Nhiệm vụ:
-Hãy chọn ra **tối đa {max_messages} tin nhắn** từ lịch sử hội thoại mà **liên quan nhất** đến câu hỏi hiện tại.
-
-Quy tắc:
-1. Ưu tiên các tin nhắn gần đây hơn
-2. Chọn các tin nhắn có nội dung liên quan đến câu hỏi
-3. Giữ nguyên định dạng của tin nhắn
-4. Trả về dưới dạng danh sách JSON
-
-Định dạng trả về:
-[
-  {{"role": "user", "content": "..."}},
-  {{"role": "chatbot", "content": "..."}}
-]
-"""
-
 # QA with RAG prompt
 PROMPT_QA_RAG = """
 Bạn là một trợ lý AI thông minh, có nhiệm vụ trả lời các câu hỏi về dự án dựa trên dữ liệu được cung cấp.
