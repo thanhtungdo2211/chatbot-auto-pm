@@ -9,6 +9,7 @@ from auto_pm_agent_api.application.project_management_service import ProjectMana
 from auto_pm_agent_api.application.qa_service import QAService
 from auto_pm_agent_api.application.assignment_service import AssignmentService
 from auto_pm_agent_api.application.report_session import ReportSessionManager
+from auto_pm_agent_api.utils import format_chat_response
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,7 @@ class ChatService:
             response = (
                 "Tôi đã hoàn tất đọc file. Hiện tại dữ liệu từ file sẽ được lưu để tạo thông tin về project."
             )
+            response = format_chat_response(response)
             self._save_memory(user_id, query, response)
             return response, mode_report
         
@@ -117,6 +119,7 @@ class ChatService:
             if not handled:
                 response = self._handle_staff_qa(user_id, query, history_str, plane_user_id)
                 new_mode_report = mode_report
+            response = format_chat_response(response)
             self._save_memory(user_id, query, response)
             return response, new_mode_report
 
@@ -130,6 +133,7 @@ class ChatService:
             extra_manager_payload=extra_manager_payload,
         )
         if handled_report:
+            report_response = format_chat_response(report_response or "")
             self._save_memory(user_id, query, report_response)
             return report_response, current_report_mode
 
@@ -144,6 +148,7 @@ class ChatService:
                 active_session=active_session,
             )
 
+            response = format_chat_response(response)
             self._save_memory(user_id, query, response)
 
             if session is None:
@@ -194,6 +199,7 @@ class ChatService:
             response = "Xin lỗi, tôi không thể xử lý yêu cầu của bạn vào lúc này."
 
         # Save to memory
+        response = format_chat_response(response)
         self._save_memory(user_id, query, response)
         
         logger.info(f"Response: {response[:100]}")
@@ -546,4 +552,3 @@ class ChatService:
 
         response = "Xin lỗi, tôi không thể xử lý yêu cầu của bạn vào lúc này."
         return None, response
-

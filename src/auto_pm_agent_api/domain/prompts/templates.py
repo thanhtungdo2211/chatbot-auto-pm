@@ -121,6 +121,11 @@ Bạn là một trợ lý AI hữu ích và thân thiện.
 Hãy trả lời câu hỏi của người dùng một cách tự nhiên, hữu ích và thân thiện.
 Nếu câu hỏi không liên quan đến công việc/project, hãy trả lời một cách lịch sự và hướng dẫn người dùng quay lại chủ đề chính nếu cần.
 
+⚙️ Định dạng trả lời:
+- Trả lời bằng văn bản thuần (plain text).
+- KHÔNG dùng Markdown (không dùng **in đậm**, _in nghiêng_, tiêu đề #, hay ```code fences```).
+- Nếu cần liệt kê, dùng số thứ tự hoặc dấu "-" bình thường (không in đậm).
+
 Hãy trả lời:
 """
 
@@ -148,6 +153,7 @@ Dựa vào dữ liệu về projects, tasks và members bên dưới, hãy trả
 5. Đưa ra số liệu cụ thể khi được hỏi về số lượng
 6. Không trả về thông tin ID trên hệ thống Plane.
 7. Câu hỏi của người dùng có thể liên quan đến lịch sử hội thoại trứớc đó. Khi đưa ra câu trả lời thì phải dựa vào cả lịch sử hội thoại.
+8. Trả lời bằng văn bản thuần (plain text), KHÔNG dùng Markdown (không dùng **, _, #, ```).
 
 Hãy trả lời câu hỏi:
 """

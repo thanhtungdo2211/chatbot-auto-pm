@@ -567,10 +567,15 @@ class QAService:
         for project in projects:
             project_name = getattr(project, "name", "") or "Không rõ tên dự án"
             try:
-                issues = plane_api.list_issues(
-                    project_id=getattr(project, "id"),
-                    assignee=assignee_filter if assignee_filter else None,
-                )
+                project_id = getattr(project, "id")
+                if assignee_filter:
+                    try:
+                        issues = plane_api.list_issues(project_id=project_id, assignee=assignee_filter)
+                    except TypeError:
+                        # Some Plane API adapters don't accept `assignee` kwarg.
+                        issues = plane_api.list_issues(project_id=project_id)
+                else:
+                    issues = plane_api.list_issues(project_id=project_id)
             except Exception as exc:
                 logger.warning(
                     "Could not fetch issues for project %s: %s", project_name, exc

@@ -63,9 +63,11 @@ class ReportSessionManager:
                 state["status"] = "collecting"
                 state["mode_report"] = True
                 self.sessions[user_id] = state
+                # Provide feedback with brief summary
+                feedback = self._generate_acknowledgment_feedback(query, "staff")
                 return (
                     True,
-                    "Đã ghi nhận nội dung báo cáo và cập nhật bản nháp. Bạn có thể tiếp tục bổ sung hoặc nói 'kết thúc báo cáo' để gửi.",
+                    feedback + "\n\nBạn có thể tiếp tục bổ sung hoặc nói 'kết thúc báo cáo' để gửi.",
                     True,
                 )
 
@@ -124,9 +126,11 @@ class ReportSessionManager:
                 state["status"] = "reviewing"
                 state["mode_report"] = True
                 self.sessions[user_id] = state
+                # Provide feedback with brief summary
+                feedback = self._generate_acknowledgment_feedback(query, "manager")
                 return (
                     True,
-                    "Đã ghi nhận nội dung đánh giá/báo cáo và cập nhật bản nháp. Bạn có thể tiếp tục bổ sung hoặc nói 'kết thúc báo cáo' để đóng.",
+                    feedback + "\n\nBạn có thể tiếp tục bổ sung đánh giá hoặc nói 'kết thúc đánh giá báo cáo' để đóng.",
                     True,
                 )
 
@@ -160,6 +164,35 @@ class ReportSessionManager:
         extra_staff_payload: Optional[dict],
     ) -> None:
         if mode_flag and not state.get("mode_report"):
+            # Log the input that triggered report-mode activation for manager
+            if (state.get("role") or "").lower() == "manager":
+                try:
+                    import json
+
+                    def _trunc(value: object, limit: int) -> str:
+                        text = str(value) if value is not None else ""
+                        return text if len(text) <= limit else text[:limit] + "...(truncated)"
+
+                    payload_preview = ""
+                    if extra_manager_payload is not None:
+                        try:
+                            payload_preview = json.dumps(
+                                extra_manager_payload, ensure_ascii=False, sort_keys=True
+                            )
+                        except Exception:
+                            payload_preview = str(extra_manager_payload)
+
+                    self.logger.info(
+                        "Report mode activated (manager): user_id=%s day=%s query=%s extra_manager_payload=%s",
+                        user_id,
+                        state.get("day") or date.today().isoformat(),
+                        _trunc(query, 800),
+                        _trunc(payload_preview, 2000),
+                    )
+                except Exception:
+                    # Never block activation on logging issues
+                    pass
+
             if query:
                 state["infor_report"] = [query]
                 report_text = (state.get("report_text") or "").strip()
@@ -235,6 +268,56 @@ class ReportSessionManager:
         review_kw = ["đánh giá báo cáo", "review báo cáo", "feedback báo cáo", "nhận xét báo cáo", "duyệt báo cáo"]
         return any(k in q for k in review_kw)
 
+    def _generate_acknowledgment_feedback(self, query: Optional[str], role: str) -> str:
+        """
+        Generate a brief acknowledgment with key points from the query.
+        Extract important keywords to show we understood the content.
+        """
+        if not query or len(query.strip()) < 10:
+            return "Đã ghi nhận nội dung."
+
+        # Extract key phrases/info
+        q = query.strip()
+        feedback_parts = []
+
+        if role == "manager":
+            feedback_parts.append("Đã ghi nhận đánh giá của bạn")
+        else:
+            feedback_parts.append("Đã ghi nhận báo cáo của bạn")
+
+        # Extract task mentions
+        import re
+        task_pattern = r'(?:task|module|công việc|dự án)\s+([A-Za-z0-9\s]+?)(?:\s+|:|,|;|\.)'
+        task_matches = re.findall(task_pattern, q.lower(), re.IGNORECASE)
+        if task_matches:
+            tasks = [m.strip().title() for m in task_matches[:2]]  # Limit to 2
+            feedback_parts.append(f"về {', '.join(tasks)}")
+
+        # Extract completion/status indicators
+        completion_keywords = {
+            "hoàn thành": "đã hoàn thành",
+            "xong": "đã xong",
+            "chưa có": "chưa có tiến độ",
+            "đang làm": "đang thực hiện",
+            "blocker": "có vướng mắc",
+            "vướng mắc": "có vướng mắc",
+            "cần hỗ trợ": "cần hỗ trợ",
+        }
+        statuses = []
+        for kw, status in completion_keywords.items():
+            if kw in q.lower():
+                statuses.append(status)
+                if len(statuses) >= 2:
+                    break
+
+        if statuses:
+            feedback_parts.append(f"({', '.join(statuses)})")
+
+        # Build final message
+        if len(feedback_parts) > 1:
+            return ". ".join(feedback_parts) + "."
+        return "Đã ghi nhận nội dung và cập nhật bản nháp."
+
     def _summarize_report(self, state: dict) -> str:
         report_text = (state.get("report_text") or "").strip()
         if report_text:
@@ -261,9 +344,19 @@ class ReportSessionManager:
         task_lines = []
         for t in tasks:
             issue = t.get("issue") or {}
-            task_lines.append(
-                f"- {issue.get('name')} | project: {t.get('project_name')} | trạng thái: {issue.get('state')} | start: {issue.get('start_date')} | target: {issue.get('target_date')}"
-            )
+            # Build task info without raw state ID
+            task_info_parts = [
+                f"- **{issue.get('name')}**",
+                f"Dự án: {t.get('project_name')}",
+            ]
+            if issue.get('start_date'):
+                task_info_parts.append(f"Bắt đầu: {issue.get('start_date')}")
+            if issue.get('target_date'):
+                task_info_parts.append(f"Deadline: {issue.get('target_date')}")
+            if issue.get('priority') and issue.get('priority') != 'none':
+                task_info_parts.append(f"Độ ưu tiên: {issue.get('priority')}")
+
+            task_lines.append(" | ".join(task_info_parts))
         tasks_text = "\n".join(task_lines) if task_lines else "Chưa có task nào được giao."
         tasks_brief = "Các task bạn cần báo cáo:\n" + (tasks_text if task_lines else "Không có task.")
         prompt = (
@@ -310,17 +403,72 @@ class ReportSessionManager:
                     else:
                         assignees_text = str(assignees)
                     has_report = iss.get("has_report")
-                    lines.append(
-                        f"  • {iss.get('issue_name')} | assignees: {assignees_text} | báo cáo: {'có' if has_report else 'chưa có'}"
-                    )
+                    progress_entries = iss.get("progress_entries") or []
+
+                    # Build detailed line with progress info if available
+                    if has_report and progress_entries:
+                        # Extract full info from progress entries
+                        progress_details = []
+                        for entry in progress_entries[:3]:  # Show up to 3 most recent entries
+                            detail_parts = []
+
+                            # Extract daily_tasks info
+                            daily_tasks = entry.get("daily_tasks", {})
+                            tasks = daily_tasks.get("tasks", [])
+                            if tasks:
+                                task_summaries = []
+                                for task in tasks:
+                                    task_info = f"{task.get('title', 'N/A')}: {task.get('status', 'unknown')}"
+                                    if task.get('progress') is not None:
+                                        task_info += f" ({task.get('progress')}%)"
+                                    if task.get('time_spent'):
+                                        task_info += f", time: {task.get('time_spent')}"
+                                    task_summaries.append(task_info)
+                                detail_parts.append("Tasks: " + "; ".join(task_summaries))
+
+                            # Extract blockers
+                            blockers = daily_tasks.get("blockers", [])
+                            if blockers:
+                                detail_parts.append(f"Blockers: {', '.join(blockers)}")
+
+                            # Extract achievements
+                            achievements = daily_tasks.get("achievements", [])
+                            if achievements:
+                                detail_parts.append(f"Achievements: {', '.join(achievements)}")
+
+                            # Add notes (full text, not truncated)
+                            notes = entry.get("notes", "")
+                            if notes:
+                                detail_parts.append(f"Notes: {notes}")
+
+                            # Add day if available
+                            day = entry.get("day", "")
+                            if day:
+                                detail_parts.insert(0, f"Day: {day}")
+
+                            if detail_parts:
+                                progress_details.append(" | ".join(detail_parts))
+
+                        progress_text = "\n      ".join(progress_details) if progress_details else "có báo cáo nhưng chưa có chi tiết"
+                        lines.append(
+                            f"  • {iss.get('issue_name')} | assignees: {assignees_text} | báo cáo: có\n      {progress_text}"
+                        )
+                    else:
+                        lines.append(
+                            f"  • {iss.get('issue_name')} | assignees: {assignees_text} | báo cáo: chưa có"
+                        )
         prompt = (
-            "Bạn là manager assistant. Hãy tóm tắt các task và tình trạng báo cáo của ngày nói trên.\n"
-            "Yêu cầu bản tóm tắt nêu rõ: task nào đã có báo cáo (nếu có thì ngắn gọn nội dung), task nào chưa có báo cáo. "
-            "Mời manager đặt câu hỏi hoặc bổ sung đánh giá. Tránh chỉ ghi phần trăm, hãy nhấn mạnh kết quả cụ thể/đầu ra và vướng mắc.\n"
-            + "\n".join(lines)
+            "Bạn là manager assistant. Hãy tóm tắt các task và tình trạng báo cáo của ngày nói trên (nói rõ tình trạng về nội dung, ...).\n"
+            "QUAN TRỌNG: CHỈ sử dụng thông tin có trong dữ liệu bên dưới. KHÔNG tự thêm hoặc suy đoán thông tin.\n"
+            "- Với task đã có báo cáo: tóm tắt ngắn gọn nội dung đã cung cấp\n"
+            "- Với task chưa có báo cáo: nêu rõ là chưa có\n"
+            "Mời manager đặt câu hỏi hoặc bổ sung đánh giá. Nhấn mạnh kết quả cụ thể/đầu ra và vướng mắc, tránh chỉ ghi phần trăm. \n\n"
+            "Nếu chưa có báo cáo cho task nào vẫn phải liệt kê các task ra với tình trạng là chưa có báo cáo. "
+            "Dữ liệu:\n" + "\n".join(lines)
         )
         try:
-            resp = self.general_bot.generate_response(history_str, prompt)
+            # Don't use history for first response to avoid hallucination from old data
+            resp = self.general_bot.generate_response("", prompt)
             self._log_llm(channel="manager_first", user_id=user_id, role="manager", prompt=prompt, response=resp)
             return resp
         except Exception as exc:
@@ -464,6 +612,15 @@ class ReportSessionManager:
           "task_job_chatbot": false
         }
         Resolve assignee_ids -> display/email/role nếu có member_map.
+
+        Ngoài ra chấp nhận payload dạng "query trực tiếp" (không bọc key `manager`):
+        {
+          "day": "2025-12-16",
+          "projects": [...],
+          "total_projects": 2,
+          "total_issues": 10,
+          "task_job_chatbot": false
+        }
         """
         if not payload:
             return {}
@@ -487,23 +644,62 @@ class ReportSessionManager:
                 res.append({"id": aid, "display_name": disp, "email": email, "role": role, "resolved": ", ".join([disp] + extra) if extra else disp})
             return res
 
+        # Normalize payload: accept either wrapped payload["manager"] or direct query payload
+        mgr_items = payload.get("manager")
+        if not mgr_items and any(k in payload for k in ("day", "projects", "total_projects", "total_issues")):
+            mgr_items = [
+                {
+                    "user_id": payload.get("user_id"),
+                    "role": "manager",
+                    "query": {
+                        "day": payload.get("day") or payload.get("manager_summary_day"),
+                        "projects": payload.get("projects") or [],
+                        "total_projects": payload.get("total_projects"),
+                        "total_issues": payload.get("total_issues"),
+                    },
+                    "mode_report": True,
+                }
+            ]
+        if not isinstance(mgr_items, list):
+            mgr_items = []
+
         mgr_list = []
-        for mgr in payload.get("manager", []):
+        for mgr in mgr_items:
             q = mgr.get("query") or {}
             projects = q.get("projects") or []
             new_projects = []
             for p in projects:
+                # Accept a few common variants: {name,id} or {project_name,project_id}
+                project_name = p.get("project_name") or p.get("name")
+                project_id = p.get("project_id") or p.get("id")
                 issues = p.get("issues") or []
                 new_issues = []
                 for iss in issues:
+                    # Accept variants: {name,id} or {issue_name,issue_id}
+                    issue_name = iss.get("issue_name") or iss.get("name")
+                    issue_id = iss.get("issue_id") or iss.get("id")
                     assignees = resolve_ids(iss.get("assignee_ids"))
-                    new_issues.append({**iss, "assignee_details": assignees})
-                new_projects.append({**p, "issues": new_issues})
+                    new_issues.append(
+                        {
+                            **iss,
+                            "issue_name": issue_name,
+                            "issue_id": issue_id,
+                            "assignee_details": assignees,
+                        }
+                    )
+                new_projects.append(
+                    {
+                        **p,
+                        "project_name": project_name,
+                        "project_id": project_id,
+                        "issues": new_issues,
+                    }
+                )
             mgr_list.append({**mgr, "query": {**q, "projects": new_projects}})
 
         return {
             "manager": mgr_list,
-            "manager_summary_day": payload.get("manager_summary_day"),
+            "manager_summary_day": payload.get("manager_summary_day") or payload.get("day"),
             "task_job_chatbot": payload.get("task_job_chatbot", False),
         }
 
@@ -575,22 +771,30 @@ class ReportSessionManager:
         except Exception as exc:
             self.logger.warning("Không map được Zalo id sang Plane id, dùng user_id thô: %s", exc)
 
-        try:
-            issues = plane_api.list_issues(assignee=str(plane_user_id))
-        except Exception as exc:
-            self.logger.warning("Không lấy được danh sách issues để cập nhật báo cáo: %s", exc)
-            return "Không thể đẩy báo cáo lên Plane (lỗi lấy danh sách task)."
+        today_str = date.today().isoformat()
+        issues = self._get_report_target_issues(
+            plane_api=plane_api,
+            state=state,
+            plane_user_id=str(plane_user_id),
+            today_str=today_str,
+        )
 
         if not issues:
             return "Không tìm thấy task nào của bạn để cập nhật báo cáo."
 
         updated_count = 0
         failed = 0
-        today_str = date.today().isoformat()
         for issue in issues:
             try:
-                project_id = getattr(issue, "project", None)
-                issue_id = getattr(issue, "id", None)
+                # issue can be a PlaneIssue object or a normalized dict (from report_context)
+                if isinstance(issue, dict):
+                    project_id = issue.get("project_id")
+                    issue_id = issue.get("issue_id")
+                    issue_name = issue.get("issue_name") or ""
+                else:
+                    project_id = getattr(issue, "project", None)
+                    issue_id = getattr(issue, "id", None)
+                    issue_name = getattr(issue, "name", "") or ""
                 if not project_id or not issue_id:
                     continue
 
@@ -600,9 +804,11 @@ class ReportSessionManager:
                     "daily_tasks": {
                         "tasks": [
                             {
-                                "title": getattr(issue, "name", ""),
-                                "status": getattr(issue, "state", "") or "in_progress",
-                                "progress": None,
+                                "id": str(issue_id),
+                                "title": issue_name,
+                                # Use a safe, API-docs-aligned status value
+                                "status": "in_progress",
+                                "progress": 0,
                                 "time_spent": None,
                             }
                         ],
@@ -644,3 +850,81 @@ class ReportSessionManager:
             return f"Đã cập nhật daily progress cho {updated_count} task; {failed} task lỗi."
         return f"Đã cập nhật daily progress cho {updated_count} task trên Plane."
 
+    def _get_report_target_issues(
+        self,
+        plane_api,
+        state: dict,
+        plane_user_id: str,
+        today_str: str,
+    ) -> list:
+        """
+        Chọn danh sách issues cần update report theo đúng cách trong `api-docs`:
+        - Ưu tiên dùng `state['report_context']` (đã build từ list_projects + list_issues(project_id))
+        - Fallback: list_projects + list_issues(project_id) rồi tự lọc theo assignees và (nếu có) start/target date.
+        """
+        # 1) Prefer report_context (staff payload / prebuilt context)
+        ctx = state.get("report_context") or {}
+        staff_entries = ctx.get("staff") or []
+        for entry in staff_entries:
+            if str(entry.get("user_id")) != str(plane_user_id):
+                continue
+            tasks = entry.get("tasks") or []
+            results = []
+            for t in tasks:
+                issue = t.get("issue") or {}
+                pid = t.get("project_id")
+                iid = issue.get("id")
+                if pid and iid:
+                    results.append(
+                        {
+                            "project_id": pid,
+                            "issue_id": iid,
+                            "issue_name": issue.get("name"),
+                            "start_date": issue.get("start_date"),
+                            "target_date": issue.get("target_date"),
+                        }
+                    )
+            if results:
+                return results
+
+        # 2) Fallback: fetch using "api-docs" approach (no `assignee` filter in request)
+        try:
+            projects = plane_api.list_projects()
+        except Exception as exc:
+            self.logger.warning("Không lấy được projects để lọc task báo cáo: %s", exc)
+            return []
+
+        matched = []
+        for project in projects or []:
+            pid = getattr(project, "id", None) or (project.get("id") if isinstance(project, dict) else None)
+            if not pid:
+                continue
+            try:
+                issues = plane_api.list_issues(project_id=pid)
+            except Exception as exc:
+                pname = getattr(project, "name", None) or (project.get("name") if isinstance(project, dict) else pid)
+                self.logger.warning("Không lấy được issues cho project %s: %s", pname, exc)
+                continue
+
+            for iss in issues or []:
+                # Normalize assignees (list or single)
+                raw_assignees = getattr(iss, "assignees", None) or getattr(iss, "assignee", None) or []
+                if isinstance(raw_assignees, str):
+                    raw_assignees = [raw_assignees]
+                if not raw_assignees or str(plane_user_id) not in [str(x) for x in raw_assignees]:
+                    continue
+
+                # Filter to "today tasks" if both dates are present (as in api-docs/query_task_today.py)
+                start_date = getattr(iss, "start_date", None)
+                target_date = getattr(iss, "target_date", None)
+                if start_date and target_date:
+                    try:
+                        if not (str(start_date) <= today_str <= str(target_date)):
+                            continue
+                    except Exception:
+                        # If comparison fails, don't filter out
+                        pass
+
+                matched.append(iss)
+
+        return matched

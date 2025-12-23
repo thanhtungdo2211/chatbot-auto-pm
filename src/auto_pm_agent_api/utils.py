@@ -1,6 +1,8 @@
 """Utility functions for the application."""
 
 import logging
+import os
+import re
 from typing import Any, Dict, List
 from datetime import datetime
 
@@ -138,3 +140,73 @@ def validate_email(email: str) -> bool:
     import re
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(pattern, email))
+
+
+def markdown_to_text(text: str) -> str:
+    """
+    Convert a subset of Markdown to plain text for clients that don't render Markdown.
+
+    This is intentionally lightweight (no external deps) and focuses on the most common
+    Markdown constructs emitted by LLMs: emphasis, code fences, inline code, headings,
+    links, blockquotes.
+    """
+    if not text:
+        return text
+
+    out = str(text)
+    out = out.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Remove code fences but keep code content
+    out = re.sub(r"```[^\n]*\n(.*?)```", r"\1", out, flags=re.DOTALL)
+    out = re.sub(r"```(.*?)```", r"\1", out, flags=re.DOTALL)
+
+    # Inline code
+    out = re.sub(r"`([^`]+)`", r"\1", out)
+
+    # Images: ![alt](url) -> alt (url)
+    out = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", r"\1 (\2)", out)
+
+    # Links: [text](url) -> text (url)
+    out = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", out)
+
+    # Headings: # Title -> Title
+    out = re.sub(r"(?m)^\s{0,3}#{1,6}\s+", "", out)
+
+    # Blockquotes: > quote -> quote
+    out = re.sub(r"(?m)^\s{0,3}>\s?", "", out)
+
+    # Horizontal rules
+    out = re.sub(r"(?m)^\s{0,3}(-{3,}|\*{3,}|_{3,})\s*$", "", out)
+
+    # Emphasis (bold/italic/strikethrough) - keep inner text
+    for _ in range(3):
+        prev = out
+        out = re.sub(r"\*\*(.+?)\*\*", r"\1", out)
+        out = re.sub(r"__(.+?)__", r"\1", out)
+        out = re.sub(r"~~(.+?)~~", r"\1", out)
+        # Single * / _ emphasis (avoid words_with_underscore)
+        out = re.sub(r"(?<!\w)\*(?!\s)(.+?)(?<!\s)\*(?!\w)", r"\1", out)
+        out = re.sub(r"(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)", r"\1", out)
+        if out == prev:
+            break
+
+    # Strip trivial HTML tags if present
+    out = re.sub(r"<[^>]+>", "", out)
+
+    # Cleanup excessive blank lines
+    out = re.sub(r"\n{3,}", "\n\n", out).strip()
+    return out
+
+
+def format_chat_response(text: str) -> str:
+    """
+    Normalize chatbot output. Default behavior converts Markdown → plain text.
+
+    Toggle by env:
+    - RESPONSE_FORMAT=markdown   => keep original
+    - RESPONSE_FORMAT=text       => convert to plain text (default)
+    """
+    fmt = (os.getenv("RESPONSE_FORMAT") or "text").strip().lower()
+    if fmt in {"markdown", "md"}:
+        return text or ""
+    return markdown_to_text(text or "")

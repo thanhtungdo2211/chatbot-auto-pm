@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
+from auto_pm_agent_api.utils import format_chat_response
 from auto_pm_agent_api.infrastructure.api.models import (
     ChatRequest,
     ChatResponse,
@@ -85,6 +86,17 @@ def chat_endpoint(request: ChatRequest):
             file_content=request.file_content,
             mode_report=request.mode_report,
         )
+
+        # Ensure plain-text output for clients that don't render Markdown.
+        response_text = format_chat_response(response_text)
+
+        logger.info(
+            "Chat response for user %s (role=%s): mode_report_in=%s mode_report_out=%s",
+            request.user_id,
+            request.role,
+            request.mode_report,
+            mode_report,
+        )
         
         return ChatResponse(
             user_id=request.user_id,
@@ -96,10 +108,11 @@ def chat_endpoint(request: ChatRequest):
         
     except Exception as e:
         logger.error(f"Error processing chat request: {e}", exc_info=True)
+        fallback = format_chat_response("Xin lỗi, đã xảy ra lỗi khi xử lý yêu cầu của bạn.")
         return ChatResponse(
             user_id=request.user_id,
             query=request.query,
-            response="Xin lỗi, đã xảy ra lỗi khi xử lý yêu cầu của bạn.",
+            response=fallback,
             success=False,
             error=str(e),
             mode_report=request.mode_report,
