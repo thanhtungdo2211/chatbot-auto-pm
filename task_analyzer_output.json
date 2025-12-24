@@ -1,0 +1,61 @@
+{
+  "evaluations": {
+    "TASK-001": {
+      "task_id": "TASK-001",
+      "quality_score": 0.5,
+      "risk_level": "high",
+      "risk_factors": [
+        "high_priority"
+      ],
+      "insights": [
+        "Automated evaluation unavailable"
+      ],
+      "recommendations": [
+        "Review task progress manually"
+      ],
+      "evaluated_at": "2025-12-24T07:52:02.952136+00:00"
+    },
+    "TASK-002": {
+      "task_id": "TASK-002",
+      "quality_score": 0.5,
+      "risk_level": "high",
+      "risk_factors": [
+        "high_priority"
+      ],
+      "insights": [
+        "Automated evaluation unavailable"
+      ],
+      "recommendations": [
+        "Review task progress manually"
+      ],
+      "evaluated_at": "2025-12-24T07:52:04.396075+00:00"
+    },
+    "TASK-003": {
+      "task_id": "TASK-003",
+      "quality_score": 0.5,
+      "risk_level": "high",
+      "risk_factors": [
+        "low_progress",
+        "status_progress_mismatch",
+        "high_priority"
+      ],
+      "insights": [
+        "Automated evaluation unavailable"
+      ],
+      "recommendations": [
+        "Review task progress manually"
+      ],
+      "evaluated_at": "2025-12-24T07:52:05.732813+00:00"
+    }
+  },
+  "trends": {
+    "velocity": 0.0,
+    "blocker_frequency": 1,
+    "average_quality": null,
+    "trend": "slow",
+    "total_tasks": 2,
+    "completed_tasks": 0,
+    "days_analyzed": 2
+  },
+  "timestamp": "2025-12-24T14:52:05.733084"
+}

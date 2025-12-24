@@ -193,3 +193,58 @@ Schema bắt buộc:
   "updated_at": "2024-01-01T00:00:00Z"
 }}
 """
+
+PROMPT_TASK_EVALUATION = """You are an expert project manager evaluating task progress reports.
+
+Analyze the following task and provide a structured evaluation:
+
+{task_context}
+
+Full Report:
+{report_text}
+
+Evaluate based on these criteria:
+
+1. **Quality Score (0.0 - 1.0)**:
+   - 1.0: Excellent - Specific deliverables mentioned (e.g., "completed API endpoint /users/login with JWT auth"), clear blockers with details, concrete next steps
+   - 0.7: Good - Some specifics but mixed with vague statements (e.g., "made good progress on login feature")
+   - 0.5: Acceptable - Mostly vague (e.g., "worked on login, 70% done")
+   - 0.3: Poor - Only percentages or generic statements, no details
+   - 0.0: Unacceptable - No meaningful information
+
+2. **Risk Level** (low/medium/high/critical):
+   - LOW: On track, no blockers, clear progress
+   - MEDIUM: Minor blockers, slightly behind schedule, or vague reporting
+   - HIGH: Significant blockers, deadline risk, or stalled progress
+   - CRITICAL: Severe blockers, missed deadline, or no progress for extended period
+
+3. **Risk Factors** (list applicable):
+   - deadline_risk: Target date approaching with low progress
+   - blocker_unresolved: Blocker persisting multiple days
+   - low_velocity: Progress slower than expected
+   - vague_reporting: Insufficient detail in report
+   - status_mismatch: Status doesn't align with progress %
+   - dependency_blocked: Waiting on external team/resource
+   - scope_creep: Indication of expanding scope
+
+4. **Insights** (2-3 key observations):
+   - Objective findings about the task state
+   - Pattern detection (e.g., "Task blocked for 3 consecutive days")
+   - Progress trends (e.g., "Velocity decreased 40% this week")
+
+5. **Recommendations** (1-3 actionable items):
+   - Specific actions manager or team should take
+   - Examples: "Schedule blocker review with backend team", "Clarify requirements for authentication flow", "Consider reassigning if blocked beyond 5 days"
+
+Return ONLY valid JSON matching TaskEvaluation schema with these exact fields:
+- task_id (string)
+- quality_score (float 0-1)
+- risk_level (string: "low"/"medium"/"high"/"critical")
+- risk_factors (array of strings)
+- insights (array of strings)
+- recommendations (array of strings)
+
+⚠️ IMPORTANT: Do NOT include "evaluated_at" field - it will be set automatically by the system.
+
+Be concise but specific. Focus on actionable intelligence for managers.
+"""

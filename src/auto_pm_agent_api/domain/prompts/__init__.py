@@ -6,6 +6,7 @@ from .templates import (
     PROMPT_GENERAL_BOT,
     PROMPT_QA_RAG,
     PROMPT_WORK_REPORT_EXTRACT,
+    PROMPT_TASK_EVALUATION
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "PROMPT_GENERAL_BOT",
     "PROMPT_QA_RAG",
     "PROMPT_WORK_REPORT_EXTRACT",
+    "PROMPT_TASK_EVALUATION"
 ]

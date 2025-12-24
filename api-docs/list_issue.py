@@ -3,11 +3,11 @@ import json
 
 
 workspace_slug = "thang"
-project_id = "c70f7676-43c6-4a5f-962a-931a122409cb"
+project_id = "3b694073-cc0e-4627-a392-fec50a428b69"
 
-url = f"http://localhost:8000/api/v1/workspaces/{workspace_slug}/projects/{project_id}/issues/"
+url = f"http://192.168.6.16:8000/api/v1/workspaces/{workspace_slug}/projects/{project_id}/issues/"
 
-headers = {"x-api-key": "plane_api_321f6a302c724a5c90adfc32f0da479e"}
+headers = {"x-api-key": "plane_api_cc4469859d084733bcdcdbf7aa9c8979"}
 
 response = requests.get(url, headers=headers)
 
